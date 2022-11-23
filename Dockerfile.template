@@ -10,7 +10,7 @@ RUN \
 	apt-mark auto '.*' > /dev/null; \
 	[ -z "$savedAptMark" ] || apt-mark manual $savedAptMark > /dev/null; \
 # Install redis package
-	DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends nginx-full; \
+	DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends nginx-full bind9-host; \
 	apt-get purge -y --auto-remove -o APT::AutoRemove::RecommendsImportant=false; \
 	rm -rf /var/lib/apt/lists/*; \
 	rm -rf /var/cache/apt/archives/*; \
