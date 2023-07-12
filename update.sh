@@ -7,7 +7,7 @@ cd "$(dirname "$(readlink -f "$BASH_SOURCE")")"
 distrs=( "$@" )
 
 if [ ${#distrs[@]} -eq 0 ]; then
-	GLOBIGNORE=".*:entrypoint"
+	GLOBIGNORE=".*:latest/"
 	distrs=( */ )
 fi
 
