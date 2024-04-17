@@ -6,7 +6,6 @@ RUN \
     apk add --no-cache --upgrade \
         nginx \
         nginx-mod-http-brotli \
-        nginx-mod-stream \
         tini \
         ; \
     ln -sf /dev/stdout /var/log/nginx/access.log; \
