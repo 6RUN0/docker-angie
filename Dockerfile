@@ -8,6 +8,7 @@ RUN \
     apk add --no-cache --upgrade \
         angie \
         angie-module-brotli \
+        angie-module-modsecurity \
         tini \
         ; \
     ln -sf /dev/stdout /var/log/angie/access.log; \
