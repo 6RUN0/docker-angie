@@ -2,7 +2,8 @@ FROM alpine:3.19
 
 RUN \
     set -eux; \
-    echo "https://download.angie.software/angie/alpine/v$(cut -d'.' -f1,2 /etc/alpine-release)/main" >> /etc/apk/repositories; \
+    wget -O "/etc/apk/keys/angie-signing.rsa" "https://angie.software/keys/angie-signing.rsa"; \
+    echo "https://download.angie.software/angie/alpine/v$(cut -d'.' -f1,2 /etc/alpine-release)/main" >> "/etc/apk/repositories"; \
     apk upgrade --no-cache; \
     apk add --no-cache --upgrade \
         angie \
