@@ -2,7 +2,7 @@
 
 . /docker-entrypoint-common.sh
 
-if [ "$1" = "nginx" -o "$1" = "nginx-debug" ]; then
+if [ "$1" = "angie" -o "$1" = "angie-debug" ]; then
     if find "/docker-entrypoint.d/" -mindepth 1 -maxdepth 1 -type f -print -quit 2>/dev/null | read v; then
         ngx_notice "/docker-entrypoint.d/ is not empty, will attempt to perform configuration"
 

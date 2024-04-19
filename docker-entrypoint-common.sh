@@ -1,6 +1,6 @@
 #!/bin/sh -
 
-if [ -z "${NGINX_ENTRYPOINT_QUIET_LOGS:-}" ]; then
+if [ -z "${ANGIE_ENTRYPOINT_QUIET_LOGS:-}" ]; then
     exec 3>&2
 else
     exec 3>/dev/null
