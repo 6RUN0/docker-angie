@@ -7,7 +7,6 @@ RUN \
     apk upgrade --no-cache; \
     apk add --no-cache --upgrade \
         angie \
-        angie-console-light \
         angie-module-brotli \
         tini \
         ; \
