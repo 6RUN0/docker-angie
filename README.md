@@ -2,4 +2,4 @@
 
 ## See also
 
- * [Angie installation](https://angie.software/installation/)
+- [Angie installation](https://angie.software/installation/)

@@ -1,18 +1,18 @@
-FROM alpine:3.19
+FROM alpine:3.21
 
 RUN \
-    set -eux; \
-    wget -O "/etc/apk/keys/angie-signing.rsa" "https://angie.software/keys/angie-signing.rsa"; \
-    echo "https://download.angie.software/angie/alpine/v$(cut -d'.' -f1,2 /etc/alpine-release)/main" >> "/etc/apk/repositories"; \
-    apk upgrade --no-cache; \
-    apk add --no-cache --upgrade \
-        angie \
-        angie-module-brotli \
-        angie-module-modsecurity \
-        tini \
-        ; \
-    ln -sf /dev/stdout /var/log/angie/access.log; \
-    ln -sf /dev/stderr /var/log/angie/error.log;
+  set -eux; \
+  wget -O "/etc/apk/keys/angie-signing.rsa" "https://angie.software/keys/angie-signing.rsa"; \
+  echo "https://download.angie.software/angie/alpine/v$(cut -d'.' -f1,2 /etc/alpine-release)/main" >> "/etc/apk/repositories"; \
+  apk upgrade --no-cache; \
+  apk add --no-cache --upgrade \
+  angie \
+  angie-module-brotli \
+  angie-module-modsecurity \
+  tini \
+  ; \
+  ln -sf /dev/stdout /var/log/angie/access.log; \
+  ln -sf /dev/stderr /var/log/angie/error.log;
 
 COPY . /
 
