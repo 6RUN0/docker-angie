@@ -1,0 +1,38 @@
+# https://docs.docker.com/compose/compose-file/#using-extensions-as-fragments
+x-logging: &logging-default
+  logging:
+    driver: journald
+
+x-logging-loki: &logging-loki
+  logging:
+    driver: loki
+    options:
+      mode: "non-blocking"
+      loki-url: http://127.0.0.1:3100/loki/api/v1/push
+      max-size: "50m"
+      max-file: "2"
+
+x-build: &build
+  image: "angie"
+  build:
+    context: .
+    dockerfile: ./Dockerfile
+
+networks:
+  front:
+
+services:
+  angie:
+    <<:
+      - *logging-default
+      - *build
+    container_name: angie
+    hostname: angie
+    restart: always
+    # volumes:
+    # - ./angie/config:/etc/angie/custom
+    ports:
+      - 80:80
+      - 443:443
+    networks:
+      front:

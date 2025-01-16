@@ -1,5 +1,11 @@
 FROM alpine:3.21
 
+# The angie web server https://angie.software
+# with the modules:
+# + https://github.com/google/ngx_brotli
+# + https://github.com/owasp-modsecurity/ModSecurity-nginx
+# + https://github.com/tokers/zstd-nginx-module
+# + https://github.com/yaoweibin/ngx_http_substitutions_filter_module
 RUN \
   set -eux; \
   wget -O "/etc/apk/keys/angie-signing.rsa" "https://angie.software/keys/angie-signing.rsa"; \
@@ -9,6 +15,8 @@ RUN \
   angie \
   angie-module-brotli \
   angie-module-modsecurity \
+  angie-module-subs \
+  angie-module-zstd \
   tini \
   ; \
   ln -sf /dev/stdout /var/log/angie/access.log; \
