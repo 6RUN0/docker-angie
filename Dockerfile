@@ -14,6 +14,7 @@ RUN \
   apk add --no-cache --upgrade \
   angie \
   angie-module-brotli \
+  angie-module-geoip2 \
   angie-module-modsecurity \
   angie-module-subs \
   angie-module-zstd \
