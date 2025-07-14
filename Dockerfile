@@ -1,4 +1,4 @@
-FROM alpine:3.21
+FROM alpine:3.22
 
 # The angie web server https://angie.software
 # with the modules:
