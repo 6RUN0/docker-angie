@@ -32,4 +32,5 @@ if [ -x "$1" ] || [ -x "$(which $1)" ]; then
   exec "$@"
 else
   ngx_err "$1: not executable or not found"
+  exit 1
 fi

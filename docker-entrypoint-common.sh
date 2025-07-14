@@ -13,7 +13,6 @@ ngx_log() {
 }
 ngx_err() {
   ngx_log err "$@"
-  exit 1
 }
 ngx_warning() {
   ngx_log warning "$@"
