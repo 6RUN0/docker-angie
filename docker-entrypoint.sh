@@ -3,7 +3,7 @@
 . /docker-entrypoint-common.sh
 
 if [ "$1" = "angie" ] || [ "$1" = "angie-debug" ]; then
-  if find "/docker-entrypoint.d/" -mindepth 1 -maxdepth 1 -type f -print -quit 2>/dev/null | read v; then
+  if find "/docker-entrypoint.d/" -mindepth 1 -maxdepth 1 -type f -print -quit 2>/dev/null | read -r _; then
     ngx_notice "/docker-entrypoint.d/ is not empty, will attempt to perform configuration"
 
     ngx_notice "looking for shell scripts in /docker-entrypoint.d/"
@@ -28,7 +28,7 @@ if [ "$1" = "angie" ] || [ "$1" = "angie-debug" ]; then
   fi
 fi
 
-if [ -x "$1" ] || [ -x "$(which $1)" ]; then
+if [ -n "${1:-}" ] && { [ -x "$1" ] || [ -x "$(command -v "$1" 2>/dev/null)" ]; }; then
   exec "$@"
 else
   ngx_err "$1: not executable or not found"

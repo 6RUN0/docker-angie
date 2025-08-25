@@ -1,5 +1,4 @@
-# https://docs.docker.com/compose/compose-file/#using-extensions-as-fragments
-x-logging: &logging-default
+x-logging: &logging-systemd
   logging:
     driver: journald
 
@@ -24,7 +23,8 @@ networks:
 services:
   angie:
     <<:
-      - *logging-default
+      #- *logging-systemd
+      #- *logging-loki
       - *build
     container_name: angie
     hostname: angie

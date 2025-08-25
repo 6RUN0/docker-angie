@@ -1,8 +1,8 @@
-#!/bin/sh -e
+#!/bin/sh -eu
 
 . /docker-entrypoint-common.sh
 
-if [ -z "$GEOIP2_DB_COUNTRY" ]; then
+if [ -z "${GEOIP2_DB_COUNTRY:-}" ]; then
   exit 0
 fi
 
@@ -14,6 +14,7 @@ fi
 cat <<EOF >/etc/angie/modules.d/geoip2_http.conf
 load_module modules/ngx_http_geoip2_module.so;
 EOF
+ngx_info "GeoIP2 module enabled"
 
 cat <<EOF >/etc/angie/http-conf.d/025-geoip2.conf
 geoip2 $GEOIP2_DB_COUNTRY {
@@ -21,6 +22,7 @@ geoip2 $GEOIP2_DB_COUNTRY {
   \$geoip2_country_code default=ZZ source=\$remote_addr country iso_code;
 }
 EOF
+ngx_info "GeoIP2 database configured: $GEOIP2_DB_COUNTRY"
 
 cat <<EOF >/etc/angie/http-conf.d/030-log-format-loki-with-geoip2.conf
 # Loki log format with geoip
@@ -41,9 +43,11 @@ log_format loki_with_geoip 'remote_addr=\$remote_addr'
   ' country="\$geoip2_country_code"'
   ' request_id=\$request_id';
 EOF
+ngx_info "Loki log format with geoip2 configured"
 
 cat <<EOF >etc/angie/http-conf.d/040-log.conf
 # Logging Settings
 access_log /dev/stdout loki_with_geoip;
 error_log /dev/stderr;
 EOF
+ngx_info "Log configuration updated to use geoip2 log format"

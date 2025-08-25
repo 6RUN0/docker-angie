@@ -9,7 +9,7 @@ fi
 ngx_log() {
   __type="$1"
   shift
-  printf '%s [%s] %s#%s: entrypoint: %s\n' "$(date +'%Y/%m/%d %H:%M:%S')" "$__type" "$$" "$$" "$*" >&3
+  printf '%s [%s] %s: entrypoint: %s\n' "$(date +'%Y/%m/%d %H:%M:%S')" "$__type" "$$" "$*" >&3
 }
 ngx_err() {
   ngx_log err "$@"

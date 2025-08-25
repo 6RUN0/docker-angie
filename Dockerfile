@@ -3,6 +3,7 @@ FROM alpine:3.22
 # The angie web server https://angie.software
 # with the modules:
 # + https://github.com/google/ngx_brotli
+# + https://github.com/leev/ngx_http_geoip2_module
 # + https://github.com/owasp-modsecurity/ModSecurity-nginx
 # + https://github.com/yaoweibin/ngx_http_substitutions_filter_module
 RUN \
