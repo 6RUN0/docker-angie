@@ -23,3 +23,14 @@ ngx_notice() {
 ngx_info() {
   ngx_log info "$@"
 }
+
+enable_log_format() {
+  angie-ctl httpconf en "030-log-format-$1.conf" &&
+    ngx_info "Enabled $1 log format"
+}
+
+enable_log() {
+  enable_log_format "$1"
+  angie-ctl httpconf en "040-log-$1.conf" &&
+    ngx_info "Use $1 format for access log"
+}

@@ -3,12 +3,13 @@
 . /docker-entrypoint-common.sh
 
 LC_ALL=C
+ME=$(basename "$0")
 PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
 [ "${ANGIE_ENTRYPOINT_WORKER_PROCESSES_AUTOTUNE:-}" ] || exit 0
 
 touch /etc/angie/angie.conf 2>/dev/null || {
-  ngx_warning "can not modify /etc/angie/angie.conf (read-only file system?)"
+  ngx_error "can not modify /etc/angie/angie.conf (read-only file system?)"
   exit 0
 }
 
@@ -159,7 +160,7 @@ __EOF__
   "/")
     foundroot="${found##* }$mountpoint"
     ;;
-  "$mountpoint")
+  "$mountpoint" | /../*)
     foundroot="${found##* }"
     ;;
   esac

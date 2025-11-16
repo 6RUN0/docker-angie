@@ -11,28 +11,73 @@ x-logging-loki: &logging-loki
       max-size: "50m"
       max-file: "2"
 
-x-build: &build
-  image: "angie"
+x-build-alpine: &build-alpine
+  image: "angie-alpine"
   build:
     context: .
-    dockerfile: ./Dockerfile
+    dockerfile: ./alpine/Dockerfile
+
+x-build-debian: &build-debian
+  image: "angie-debian"
+  build:
+    context: .
+    dockerfile: ./debian/Dockerfile
 
 networks:
   front:
 
 services:
-  angie:
-    <<:
-      #- *logging-systemd
-      #- *logging-loki
-      - *build
-    container_name: angie
-    hostname: angie
+  angie-official:
+    #<<:
+    #- *logging-systemd
+    #- *logging-loki
+    #- *build-alpine
+    image: docker.angie.software/angie:latest
+    container_name: angie-official
+    hostname: angie-official
     restart: always
     # volumes:
     # - ./angie/config:/etc/angie/custom
-    ports:
-      - 80:80
-      - 443:443
+    #ports:
+    #  - 80:80
+    #  - 443:443
+    networks:
+      front:
+
+  angie-alpine:
+    <<:
+      #- *logging-systemd
+      #- *logging-loki
+      - *build-alpine
+    container_name: angie-alpine
+    hostname: angie-alpine
+    restart: always
+    environment:
+      ANGIE_ENTRYPOINT_WORKER_PROCESSES_AUTOTUNE: 1
+      ANGIE_GZIP_ENABLED: 1
+    # volumes:
+    # - ./angie/config:/etc/angie/custom
+    #ports:
+    #  - 80:80
+    #  - 443:443
+    networks:
+      front:
+
+  angie-debian:
+    <<:
+      #- *logging-systemd
+      #- *logging-loki
+      - *build-debian
+    container_name: angie-debian
+    hostname: angie-debian
+    restart: always
+    environment:
+      ANGIE_ENTRYPOINT_WORKER_PROCESSES_AUTOTUNE: 1
+      ANGIE_GZIP_ENABLED: 1
+    # volumes:
+    # - ./angie/config:/etc/angie/custom
+    #ports:
+    #  - 80:80
+    #  - 443:443
     networks:
       front:
