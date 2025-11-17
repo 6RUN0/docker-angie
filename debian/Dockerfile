@@ -11,7 +11,7 @@ ARG ANGIE_SIGNING_KEY="/usr/share/keyrings/angie-signing.gpg"
 ARG ANGIE_SOURCE_LIST="/etc/apt/sources.list.d/angie.sources"
 # Helper script for angie control
 ARG ANGIE_CTL_REPO="https://github.com/6RUN0/angie-ctl.git"
-ARG ANGIE_CTL_COMMIT="cf55b243cc2b6f8b6e8b69d2815bfcc861da38e3"
+ARG ANGIE_CTL_COMMIT="4cc390317462da580d3e63907c68f775de879048"
 ARG ANGIE_CTL="/usr/local/bin/angie-ctl"
 
 # The angie web server https://angie.software
