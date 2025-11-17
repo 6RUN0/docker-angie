@@ -17,7 +17,7 @@ fi
 angie-ctl mod en http_geoip2.conf &&
   ngx_info "GeoIP2 module enabled"
 
-sed -i -e "s/%%GEOIP2_DB_COUNTRY%%/$GEOIP2_DB_COUNTRY/" /etc/angie/http-conf-available.d/025-geoip2.conf
+sed -i -e "s!%%GEOIP2_DB_COUNTRY%%!$GEOIP2_DB_COUNTRY!g" /etc/angie/http-conf-available.d/025-geoip2.conf
 angie-ctl httpconf en 025-geoip2.conf &&
   ngx_info "GeoIP2 database configured: ${GEOIP2_DB_COUNTRY}"
 
