@@ -65,9 +65,6 @@ Alternatively, use the included `docker‑compose.yml` to build and run all vari
 docker compose up --build
 ```
 
-The `latest` symlink points to the Debian variant.
-Updating this symlink allows you to change which distribution is built by default.
-
 ## Notes
 
 - The default configuration increases `worker_connections` and `worker_rlimit_nofile` to 65536

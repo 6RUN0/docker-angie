@@ -65,9 +65,6 @@ docker build -t angie‑debian -f debian/Dockerfile .
 docker compose up --build
 ```
 
-Символическая ссылка `latest` указывает на вариант с Debian.
-Обновление этой ссылки позволяет изменить дистрибутив, собираемый по умолчанию.
-
 ## Примечания
 
 - В конфигурации по умолчанию увеличены значения `worker_connections` и `worker_rlimit_nofile` до 65536
