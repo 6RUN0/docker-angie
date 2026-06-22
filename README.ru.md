@@ -65,6 +65,30 @@ docker build -t angie‑debian -f debian/Dockerfile .
 docker compose up --build
 ```
 
+### Аргументы сборки
+
+- `DEBIAN_MIRROR` / `DEBIAN_SECURITY_MIRROR` (только Debian) по умолчанию
+  указывают на официальный `https://deb.debian.org`. Укажите локальное зеркало,
+  чтобы ускорить сборку:
+
+  ```bash
+  docker build -t angie-debian -f debian/Dockerfile \
+    --build-arg DEBIAN_MIRROR=http://mirror.example.org/debian \
+    --build-arg DEBIAN_SECURITY_MIRROR=http://mirror.example.org/debian-security .
+  ```
+
+- `ANGIE_CTL_COMMIT` фиксирует коммит вспомогательной утилиты angie-ctl.
+
+### Makefile
+
+Файл `Makefile` оркеструет типовые задачи:
+
+```bash
+make lint     # shellcheck (POSIX sh) + hadolint
+make build    # сборка обоих образов
+make test     # сборка + smoke-тесты обоих образов
+```
+
 ## Примечания
 
 - В конфигурации по умолчанию увеличены значения `worker_connections` и `worker_rlimit_nofile` до 65536
@@ -72,6 +96,78 @@ docker compose up --build
 
 - В entrypoint устанавливается **angie‑ctl** (из коммита, указанного в аргументе сборки `ANGIE_CTL_COMMIT`) в `/usr/local/bin`.
 Эта утилита используется для включения или отключения конфигурационных сниппетов и модулей во время работы.
+
+## Проверка здоровья (health check)
+
+Оба образа определяют `HEALTHCHECK`, который опрашивает `GET /healthz` на порту
+80 — сервер по умолчанию отвечает на него `200 ok`. Любой другой запрос к
+несопоставленному хосту отклоняется с `444` (соединение закрывается), что
+отсекает шум сканеров и посторонних Host‑заголовков. Добавьте свои server‑блоки
+через том кастомной конфигурации, чтобы обслуживать реальный трафик.
+
+## Конфигурация применяется при создании контейнера
+
+Entrypoint включает сниппеты и (опционально) переписывает `worker_processes`
+один раз, при старте контейнера, и защищён от повторного применения. Поэтому
+изменение переменной `ANGIE_*` вступает в силу при **пересоздании** контейнера,
+а не через `docker restart` (рестарт переиспользует уже настроенный
+writable‑слой). Считайте контейнер одноразовым: меняете env — пересоздаёте.
+
+## Запуск от непривилегированного пользователя
+
+По умолчанию образы работают от root, и мастер‑процесс Angie понижает рабочие
+процессы до пользователя `angie` — это классическая модель nginx. Под `docker run
+--user` entrypoint пропускает привилегированные шаги (исправление владельца,
+автотюнинг `worker_processes`) с уведомлением, но обычный образ **не** является
+полностью rootless: angie всё ещё нужны root‑owned пути (pid‑файл, temp‑каталоги)
+и привязка к порту 80.
+
+Для полностью rootless‑развёртывания используйте **unprivileged**‑вариант образа,
+собираемый поверх обычного (`alpine/Dockerfile.unprivileged`,
+`debian/Dockerfile.unprivileged`). Он переносит pid‑файл и temp‑пути в `/tmp` и
+слушает **8080**, поэтому работает под любым uid без дополнительных capabilities:
+
+```bash
+make build-alpine-unprivileged          # или build-debian-unprivileged
+docker run --user 65534:65534 -p 8080:8080 angie-alpine-unprivileged
+```
+
+Тумблеры `ANGIE_*` для этого варианта зашиты на этапе сборки (непривилегированный
+uid не может писать в `/etc/angie/*.d`); настраивайте его через том
+`/etc/angie/custom` или собирая собственный производный образ.
+
+## ModSecurity (WAF)
+
+`ANGIE_MODSECURITY_ENABLE=yes` загружает модуль ModSecurity, но образ **не
+содержит правил** — само по себе включение ничего не блокирует. Подключите
+конфигурацию движка и набор правил (например,
+[OWASP Core Rule Set](https://coreruleset.org/)) через том `/etc/angie/custom`
+и сошлитесь на них в server‑ или location‑блоке:
+
+1. Смонтируйте `modsecurity.conf` с `SecRuleEngine On` и вашими директивами
+   `Include`, а также сами правила в `/etc/angie/custom`.
+2. Включите в кастомном server‑блоке:
+
+   ```nginx
+   # /etc/angie/custom/http.d/app.conf
+   server {
+     listen 80;
+     server_name app.example.com;
+
+     modsecurity on;
+     modsecurity_rules_file /etc/angie/custom/modsecurity/main.conf;
+
+     # ... ваши location ...
+   }
+   ```
+
+## Тестирование
+
+`make test` собирает каждый образ и запускает `test/smoke.sh`, который стартует
+контейнер и проверяет тумблеры (gzip / brotli / формат логов), поведение
+`/healthz` и `444`, аварийную остановку при сбойном entrypoint‑скрипте и запуск
+от непривилегированного пользователя. CI выполняет то же при каждом push и
+pull request; теги вида `v*` публикуют multi‑arch образы в `ghcr.io`.
 
 ## См. также
 
