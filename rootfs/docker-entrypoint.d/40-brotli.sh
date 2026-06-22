@@ -2,6 +2,8 @@
 
 . /docker-entrypoint-common.sh
 
+skip_toggle_unless_writable
+
 : "${ANGIE_BROTLI_ENABLED:=no}"
 : "${ANGIE_BROTLI_STATIC_ENABLE:=no}"
 

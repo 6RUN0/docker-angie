@@ -2,6 +2,8 @@
 
 . /docker-entrypoint-common.sh
 
+skip_toggle_unless_writable
+
 : "${ANGIE_SUBS_ENABLE:=no}"
 
 case "${ANGIE_SUBS_ENABLE}" in

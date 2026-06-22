@@ -30,6 +30,25 @@ is_root() {
   [ "$(id -u)" = 0 ]
 }
 
+# Feature-toggle scripts shell out to angie-ctl (which symlinks into
+# /etc/angie/{http-conf,modules}.d) and render into http-conf-available.d. The
+# default image owns those as root; the unprivileged image chowns them to the
+# angie user at build time, so its default runtime uid can toggle features. A
+# foreign `docker run --user <uid>` that does not own them cannot write there:
+# warn and skip gracefully (the baked build-time config still serves) instead of
+# letting angie-ctl's EACCES abort the fail-fast startup. Keying on writability
+# rather than uid keeps the same path correct for root, for the angie user, and
+# for an arbitrary uid alike.
+skip_toggle_unless_writable() {
+  if [ -w /etc/angie/http-conf.d ] &&
+    [ -w /etc/angie/modules.d ] &&
+    [ -w /etc/angie/http-conf-available.d ]; then
+    return 0
+  fi
+  ngx_warning "$(basename "$0"): config dirs not writable by uid $(id -u); runtime toggling unavailable, using build-time config"
+  exit 0
+}
+
 # Active access-log snippets. Exactly one may be enabled at a time: angie applies
 # every `access_log` directive it encounters, so two active 040-log-* snippets
 # log each request twice. Keep this list in sync with http-conf-available.d.

@@ -2,6 +2,8 @@
 
 . /docker-entrypoint-common.sh
 
+skip_toggle_unless_writable
+
 : "${ANGIE_GZIP_ENABLED:=no}"
 : "${ANGIE_GZIP_STATIC_ENABLE:=no}"
 

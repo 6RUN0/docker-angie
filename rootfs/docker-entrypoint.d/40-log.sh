@@ -2,6 +2,8 @@
 
 . /docker-entrypoint-common.sh
 
+skip_toggle_unless_writable
+
 : "${ANGIE_LOG_FORMAT_EXTENDED:=no}"
 : "${ANGIE_LOG_FORMAT_LOGFMT:=no}"
 : "${ANGIE_LOG_FORMAT_MAIN:=no}"

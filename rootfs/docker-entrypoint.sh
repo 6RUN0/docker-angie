@@ -4,12 +4,14 @@
 
 entrypoint_dir="/docker-entrypoint.d"
 
-if { [ "$1" = "angie" ] || [ "$1" = "angie-debug" ]; } && ! is_root; then
+if { [ "$1" = "angie" ] || [ "$1" = "angie-debug" ]; } && ! is_root && [ -z "${ANGIE_UNPRIVILEGED:-}" ]; then
   # The default image must run as root: it binds port 80, its pidfile
   # (/run/angie.pid) and temp dirs (/var/cache/angie/*) are root-owned, and
   # angie-ctl needs write access to /etc/angie/*.d. A non-root master cannot do
   # any of that, so angie would crash later with an opaque EACCES. Fail fast with
-  # a clear message instead. For rootless operation use the unprivileged image.
+  # a clear message instead. The unprivileged image variant sets
+  # ANGIE_UNPRIVILEGED=1, which lifts this guard: its config is baked at build
+  # time and its pid/temp paths and listener were relocated for rootless use.
   ngx_err "the default image requires root; got uid $(id -u). Use the unprivileged image variant for rootless operation."
   exit 1
 elif [ "$1" = "angie" ] || [ "$1" = "angie-debug" ]; then

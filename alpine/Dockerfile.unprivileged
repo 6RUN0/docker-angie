@@ -4,33 +4,63 @@
 ARG BASE_IMAGE=angie-alpine
 FROM ${BASE_IMAGE}
 
+# Identity of the dedicated unprivileged user. uid/gid default to 65532
+# (distroless "nonroot") — high enough not to collide with a host's first user.
+# Override at build, e.g. --build-arg APP_UID=1234 --build-arg APP_GID=1234.
+ARG APP_USER=app
+ARG APP_GROUP=app
+ARG APP_UID=65532
+ARG APP_GID=65532
+
 USER root
 
 COPY rootfs-unprivileged/ /
 
 RUN set -eux; \
-  # /tmp/angie holds the pid and temp paths. World-writable but NOT sticky: the
-  # image bakes a root-owned /tmp/angie/angie.pid, and angie writes the pidfile
-  # via rename(angie.pid.tmp -> angie.pid). In a sticky dir the VFS forbids an
-  # arbitrary uid from replacing an entry it does not own, so that rename() fails
-  # with EPERM. Without the sticky bit any uid can replace the file.
+  # Dedicated unprivileged user owned by this image (not the angie package user),
+  # with a fixed uid/gid (see the APP_* build args) so the runtime identity is
+  # deterministic and stable across base/package updates and easy to pin via k8s
+  # runAsUser/runAsGroup.
+  addgroup -g "${APP_GID}" "${APP_GROUP}"; \
+  adduser -D -H -u "${APP_UID}" -G "${APP_GROUP}" -s /sbin/nologin "${APP_USER}"; \
+  # /tmp/angie holds the pid and temp paths. World-writable but NOT sticky so any
+  # uid (including a foreign `docker run --user`) can create the pidfile and temp
+  # dirs; without the sticky bit rename(angie.pid.tmp -> angie.pid) succeeds.
   mkdir -p /tmp/angie; \
   chmod 0777 /tmp/angie; \
-  # Runtime angie-ctl toggling needs write access to /etc/angie/*.d, which a
-  # non-root uid lacks. Enable the defaults (logfmt access log + relocated temp
-  # paths) now, as root, at build time.
+  # Enable the defaults (logfmt access log + relocated temp paths) now, as root.
   angie-ctl httpconf en 030-log-format-logfmt.conf; \
   angie-ctl httpconf en 040-log-logfmt.conf; \
   angie-ctl httpconf en 005-unprivileged-temp.conf; \
-  angie -t
+  # Hand the activation dirs to the app user so the default runtime uid can toggle
+  # features at start (angie-ctl en/dis symlinks, geoip2 render) without root. A
+  # foreign `docker run --user <uid>` that does not own them cannot write here;
+  # the entrypoint scripts detect that and fall back to the baked config.
+  chown "${APP_USER}:${APP_GROUP}" \
+    /etc/angie/http-conf.d \
+    /etc/angie/modules.d \
+    /etc/angie/http-conf-available.d; \
+  angie -t; \
+  # The build-time `angie -t` above runs as root and leaves a root-owned pidfile
+  # plus 0700 temp dirs in /tmp/angie. Remove them so the runtime uid (the app
+  # user, or any `--user`) recreates the pidfile and temp dirs it owns; the
+  # /tmp/angie dir itself stays non-sticky 0777.
+  rm -rf /tmp/angie/*
+
+# Mark the rootless variant for the shared entrypoint: ANGIE_UNPRIVILEGED lifts
+# the "default image requires root" guard so this image may run under a non-root
+# uid. Runtime feature toggling is governed separately: the entrypoint scripts
+# act only when the config dirs chowned above are writable by the current uid.
+ENV ANGIE_UNPRIVILEGED=1
 
 EXPOSE 8080
 
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
   CMD wget -q -O /dev/null http://127.0.0.1:8080/healthz || exit 1
 
-# Default to the unprivileged angie user; override freely with `docker run --user`.
-USER angie
+# Default to the dedicated unprivileged user (uid/gid 65532 by default); override
+# the runtime uid freely with `docker run --user`.
+USER ${APP_USER}
 
 ENTRYPOINT ["tini", "--", "/docker-entrypoint.sh"]
 

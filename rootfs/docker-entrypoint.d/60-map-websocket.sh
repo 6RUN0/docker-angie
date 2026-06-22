@@ -2,6 +2,8 @@
 
 . /docker-entrypoint-common.sh
 
+skip_toggle_unless_writable
+
 : "${ANGIE_MAP_WEBSOCKET_ENABLE:=no}"
 
 case "${ANGIE_MAP_WEBSOCKET_ENABLE}" in

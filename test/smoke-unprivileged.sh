@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # Smoke tests for the rootless (unprivileged) image. Asserts it runs under
-# arbitrary `--user <uid>` with no added capabilities, serving on port 8080.
+# arbitrary `--user <uid>` with no added capabilities (serving on port 8080),
+# that the default user can apply ANGIE_* toggles at runtime, and that a foreign
+# uid safely skips toggling with a warning instead of crashing.
 #
 # Usage: IMAGE=angie-alpine-unprivileged ./test/smoke-unprivileged.sh
 set -euo pipefail
@@ -61,6 +63,28 @@ for u in 10000:10000 4242:0 1000:1000; do
   fi
   docker rm -f "$cid" >/dev/null
 done
+
+# --- Default user owns config dirs: runtime ANGIE_* toggles apply ----------
+cid=$(start -e ANGIE_BROTLI_ENABLED=yes)
+if wait_healthy "$cid" &&
+  docker exec "$cid" sh -c 'ls /etc/angie/modules.d/http_brotli_filter.conf' >/dev/null 2>&1; then
+  pass "default user applies ANGIE_* toggle at runtime (brotli enabled)"
+else
+  fail "default user applies ANGIE_* toggle at runtime"
+  docker logs "$cid" 2>&1 | grep -iE 'emerg|not writable' | head -2 || true
+fi
+docker rm -f "$cid" >/dev/null
+
+# --- Foreign uid cannot write config: toggle skipped, still serves ---------
+cid=$(start --user 4343:4343 -e ANGIE_BROTLI_ENABLED=yes)
+if wait_healthy "$cid" &&
+  docker logs "$cid" 2>&1 | grep -qi 'runtime toggling unavailable' &&
+  ! docker exec "$cid" sh -c 'ls /etc/angie/modules.d/http_brotli_filter.conf' >/dev/null 2>&1; then
+  pass "foreign --user skips toggling with a warning, serves baked config"
+else
+  fail "foreign --user skips toggling with a warning"
+fi
+docker rm -f "$cid" >/dev/null
 
 # --- /healthz loopback-only; unknown host 444 ------------------------------
 cid=$(start --user 10000:10000)

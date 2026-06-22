@@ -123,18 +123,25 @@ root-owned paths (pidfile, temp dirs) and binds port 80.
 
 For a fully rootless deployment use the **unprivileged** image variant, built on
 top of the regular one (`alpine/Dockerfile.unprivileged`,
-`debian/Dockerfile.unprivileged`). It moves the pidfile and temp paths into
-`/tmp` and listens on **8080**, so it runs under any uid with no added
-capabilities:
+`debian/Dockerfile.unprivileged`). It runs as a dedicated `app` user (uid/gid
+`65532`, created by the image rather than reusing the angie package user), moves
+the pidfile and temp paths into `/tmp`, and listens on **8080**, so it runs under
+any uid with no added capabilities:
 
 ```bash
 make build-alpine-unprivileged          # or build-debian-unprivileged
+# Default user is app (uid/gid 65532), which owns /etc/angie/*.d, so ANGIE_* toggles apply:
+docker run -e ANGIE_BROTLI_ENABLED=yes -p 8080:8080 angie-alpine-unprivileged
+# ...or pin any uid; toggling then falls back to the build-time config:
 docker run --user 65534:65534 -p 8080:8080 angie-alpine-unprivileged
 ```
 
-Runtime `ANGIE_*` toggles are baked in at build time for this variant (a non-root
-uid cannot rewrite `/etc/angie/*.d`); customize it via the `/etc/angie/custom`
-volume or by deriving your own image.
+The `app` user owns `/etc/angie/*.d`, so runtime `ANGIE_*` toggles work under the
+default user. A foreign `docker run --user <uid>` that does not own those dirs
+cannot rewrite them: toggling is skipped with a warning and the baked build-time
+config serves. Customize further via the `/etc/angie/custom` volume or by
+deriving your own image. The user identity is configurable at build time via the
+`APP_USER`/`APP_GROUP`/`APP_UID`/`APP_GID` build args (defaults `app`/`app`/`65532`/`65532`).
 
 ## ModSecurity (WAF)
 

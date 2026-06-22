@@ -2,6 +2,8 @@
 
 . /docker-entrypoint-common.sh
 
+skip_toggle_unless_writable
+
 if [ -z "${GEOIP2_DB_COUNTRY:-}" ]; then
   exit 0
 fi
