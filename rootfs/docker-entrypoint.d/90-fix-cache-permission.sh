@@ -11,5 +11,10 @@ if [ ! -d "$CACHE_DIR" ]; then
   exit 0
 fi
 
+if ! is_root; then
+  ngx_notice "not running as root, skipping chown of $CACHE_DIR"
+  exit 0
+fi
+
 find "$CACHE_DIR" \! -user angie -exec chown angie: '{}' +
 ngx_info "Changed ownership of cache dir: $CACHE_DIR"

@@ -9,7 +9,7 @@ PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 [ "${ANGIE_ENTRYPOINT_WORKER_PROCESSES_AUTOTUNE:-}" ] || exit 0
 
 touch /etc/angie/angie.conf 2>/dev/null || {
-  ngx_error "can not modify /etc/angie/angie.conf (read-only file system?)"
+  ngx_err "can not modify /etc/angie/angie.conf (read-only file system?)"
   exit 0
 }
 
@@ -27,8 +27,9 @@ get_cpuset() {
   for token in $(tr ',' ' ' <"$cpusetroot/$cpusetfile"); do
     case "$token" in
     *-*)
-      count=$(seq $(echo "$token" | tr '-' ' ') | wc -l)
-      ncpu=$((ncpu + count))
+      # Inclusive range "start-end"; count without spawning seq (avoids the
+      # word-splitting the unquoted command substitution otherwise relied on).
+      ncpu=$((ncpu + ${token#*-} - ${token%-*} + 1))
       ;;
     *)
       ncpu=$((ncpu + 1))
@@ -186,5 +187,14 @@ ncpu=$(printf "%s\n%s\n%s\n%s\n%s\n" \
   "$ncpu_quota_v2" |
   sort -n |
   head -n 1)
+
+# Skip if already tuned: the regex below matches any line starting with
+# worker_processes, including the one it inserts, so re-running on a persisted
+# writable layer (docker restart) would comment-and-append unboundedly. The
+# sentinel comment makes the rewrite a one-time operation per config file.
+if grep -q '^# Commented out by ' /etc/angie/angie.conf; then
+  ngx_info "worker_processes already tuned, skipping"
+  exit 0
+fi
 
 sed -i.bak -r 's/^(worker_processes)(.*)$/# Commented out by '"$ME"' on '"$(date)"'\n#\1\2\n\1 '"$ncpu"';/' /etc/angie/angie.conf
