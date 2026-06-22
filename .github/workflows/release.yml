@@ -44,8 +44,11 @@ jobs:
           case "$ver" in
           *-*) ;;
           *)
-            minor="${ver%.*}"
-            [ "$minor" = "$ver" ] || tags="$tags,$base:${minor}-${VARIANT}"
+            # major.minor floating tag only for a 3-component X.Y.Z release; a
+            # 2-component tag (e.g. v1.2) would otherwise yield a bare major tag.
+            case "$ver" in
+            *.*.*) tags="$tags,$base:${ver%.*}-${VARIANT}" ;;
+            esac
             tags="$tags,$base:${VARIANT}"
             if [ "$LATEST" = "true" ]; then
               tags="$tags,$base:latest"
@@ -107,8 +110,10 @@ jobs:
           case "$ver" in
           *-*) ;;
           *)
-            minor="${ver%.*}"
-            [ "$minor" = "$ver" ] || tags="$tags,$base:${minor}-${sfx}"
+            # major.minor floating tag only for a 3-component X.Y.Z release.
+            case "$ver" in
+            *.*.*) tags="$tags,$base:${ver%.*}-${sfx}" ;;
+            esac
             tags="$tags,$base:${sfx}"
             ;;
           esac
