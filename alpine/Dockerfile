@@ -4,6 +4,9 @@
 # the "KEY" substring heuristically, so skip it for this build.
 ARG ALPINE_BASE_IMAGE=alpine:3.22
 
+# Base is pinned via the ARG default (alpine:3.22); hadolint < 2.13 does not
+# resolve ARG defaults and false-flags DL3006 on this FROM.
+# hadolint ignore=DL3006
 FROM ${ALPINE_BASE_IMAGE}
 
 # Angie mirror arguments
@@ -20,6 +23,12 @@ ARG ANGIE_CTL="/usr/local/bin/angie-ctl"
 # + https://github.com/leev/ngx_http_geoip2_module
 # + https://github.com/owasp-modsecurity/ModSecurity-nginx
 # + https://github.com/yaoweibin/ngx_http_substitutions_filter_module
+# DL3018: angie + modules are deliberately unpinned (the image tracks upstream
+# security updates, and core/modules must stay on the same current version).
+# DL3003: the `cd` into the mktemp angie-ctl clone is scoped to this layer;
+# WORKDIR would leak into later instructions. DL3047: wget without a progress
+# bar is fine in a build layer.
+# hadolint ignore=DL3018,DL3003,DL3047
 RUN \
   set -eux; \
   wget -O "${ANGIE_SIGNING_KEY}" "${ANGIE_SIGNING_KEY_URL}"; \

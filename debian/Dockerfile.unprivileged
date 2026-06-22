@@ -2,6 +2,9 @@
 # capabilities. Built on top of the regular image; overlays move pid/temp into
 # /tmp and the listener to 8080 (>= 1024, bindable without privileges).
 ARG BASE_IMAGE=angie-debian
+# Base is the just-built image, always supplied via --build-arg BASE_IMAGE; the
+# default is a local convenience tag. Old hadolint false-flags DL3006 here.
+# hadolint ignore=DL3006
 FROM ${BASE_IMAGE}
 
 # Identity of the dedicated unprivileged user. uid/gid default to 65532

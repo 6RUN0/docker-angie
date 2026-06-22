@@ -4,6 +4,9 @@
 # the "KEY" substring heuristically, so skip it for this build.
 ARG DEBIAN_BASE_IMAGE=debian:trixie-slim
 
+# Base is pinned via the ARG default (debian:trixie-slim); hadolint < 2.13 does
+# not resolve ARG defaults and false-flags DL3006 on this FROM.
+# hadolint ignore=DL3006
 FROM ${DEBIAN_BASE_IMAGE}
 
 # Mirror arguments
@@ -32,6 +35,12 @@ ARG ANGIE_CTL="/usr/local/bin/angie-ctl"
 # + https://github.com/leev/ngx_http_geoip2_module
 # + https://github.com/owasp-modsecurity/ModSecurity-nginx
 # + https://github.com/yaoweibin/ngx_http_substitutions_filter_module
+# DL3008: angie + modules are deliberately unpinned (the image tracks upstream
+# security updates, and core/modules must stay on the same current version).
+# DL3003: the `cd` into the mktemp angie-ctl clone is scoped to this layer;
+# WORKDIR would leak into later instructions. SC1091: `. /etc/os-release` reads
+# a build-time file hadolint cannot follow.
+# hadolint ignore=DL3008,DL3003,SC1091
 RUN \
   set -eux; \
   # Configure apt to use a local mirror
