@@ -40,6 +40,10 @@ RUN set -eux; \
     /etc/angie/http-conf.d \
     /etc/angie/modules.d \
     /etc/angie/http-conf-available.d; \
+  # Drop `user angie;` from the base config: a non-root master (this image's
+  # default, and the whole point of the rootless variant) cannot honor it and
+  # Angie logs a [warn] on every start. Removing it keeps the startup log clean.
+  sed -i '/^user angie;$/d' /etc/angie/angie.conf; \
   angie -t; \
   # The build-time `angie -t` above runs as root and leaves a root-owned pidfile
   # plus 0700 temp dirs in /tmp/angie. Remove them so the runtime uid (the app
