@@ -3,11 +3,16 @@ ARG DEBIAN_BASE_IMAGE=debian:trixie-slim
 FROM ${DEBIAN_BASE_IMAGE}
 
 # Mirror arguments
-# Official Debian redirector by default. Override at build time to use a local
-# mirror, e.g. --build-arg DEBIAN_MIRROR=http://mirror.example.org/debian
+# Official Debian redirector over http by default, matching Debian's own
+# default. apt integrity comes from the repository's GPG signatures, not the
+# transport, so http is safe; it also avoids a ca-certificates bootstrap
+# chicken-and-egg (the first apt-get update runs before ca-certificates is
+# installed, so an https mirror would fail TLS verification on the slim base)
+# and keeps caching proxies working. Override at build time, e.g.
+# --build-arg DEBIAN_MIRROR=http://mirror.example.org/debian
 # (see README "Building" for documented alternatives).
-ARG DEBIAN_MIRROR="https://deb.debian.org/debian"
-ARG DEBIAN_SECURITY_MIRROR="https://deb.debian.org/debian-security"
+ARG DEBIAN_MIRROR="http://deb.debian.org/debian"
+ARG DEBIAN_SECURITY_MIRROR="http://deb.debian.org/debian-security"
 # The angie signing key and source list
 ARG ANGIE_SIGNING_KEY_URL="https://angie.software/keys/angie-signing.gpg"
 ARG ANGIE_SIGNING_KEY="/usr/share/keyrings/angie-signing.gpg"
