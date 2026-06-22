@@ -1,0 +1,37 @@
+# Rootless variant: runs under any `docker run --user <uid>` with no added
+# capabilities. Built on top of the regular image; overlays move pid/temp into
+# /tmp and the listener to 8080 (>= 1024, bindable without privileges).
+ARG BASE_IMAGE=angie-alpine
+FROM ${BASE_IMAGE}
+
+USER root
+
+COPY rootfs-unprivileged/ /
+
+RUN set -eux; \
+  # /tmp/angie holds the pid and temp paths. World-writable but NOT sticky: the
+  # image bakes a root-owned /tmp/angie/angie.pid, and angie writes the pidfile
+  # via rename(angie.pid.tmp -> angie.pid). In a sticky dir the VFS forbids an
+  # arbitrary uid from replacing an entry it does not own, so that rename() fails
+  # with EPERM. Without the sticky bit any uid can replace the file.
+  mkdir -p /tmp/angie; \
+  chmod 0777 /tmp/angie; \
+  # Runtime angie-ctl toggling needs write access to /etc/angie/*.d, which a
+  # non-root uid lacks. Enable the defaults (logfmt access log + relocated temp
+  # paths) now, as root, at build time.
+  angie-ctl httpconf en 030-log-format-logfmt.conf; \
+  angie-ctl httpconf en 040-log-logfmt.conf; \
+  angie-ctl httpconf en 005-unprivileged-temp.conf; \
+  angie -t
+
+EXPOSE 8080
+
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+  CMD wget -q -O /dev/null http://127.0.0.1:8080/healthz || exit 1
+
+# Default to the unprivileged angie user; override freely with `docker run --user`.
+USER angie
+
+ENTRYPOINT ["tini", "--", "/docker-entrypoint.sh"]
+
+CMD ["angie", "-g", "daemon off;"]
