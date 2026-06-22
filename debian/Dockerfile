@@ -3,15 +3,18 @@ ARG DEBIAN_BASE_IMAGE=debian:trixie-slim
 FROM ${DEBIAN_BASE_IMAGE}
 
 # Mirror arguments
-ARG DEBIAN_MIRROR="http://mirror.selectel.ru/debian"
-ARG DEBIAN_SECURITY_MIRROR="http://mirror.selectel.ru/debian-security"
+# Official Debian redirector by default. Override at build time to use a local
+# mirror, e.g. --build-arg DEBIAN_MIRROR=http://mirror.example.org/debian
+# (see README "Building" for documented alternatives).
+ARG DEBIAN_MIRROR="https://deb.debian.org/debian"
+ARG DEBIAN_SECURITY_MIRROR="https://deb.debian.org/debian-security"
 # The angie signing key and source list
 ARG ANGIE_SIGNING_KEY_URL="https://angie.software/keys/angie-signing.gpg"
 ARG ANGIE_SIGNING_KEY="/usr/share/keyrings/angie-signing.gpg"
 ARG ANGIE_SOURCE_LIST="/etc/apt/sources.list.d/angie.sources"
 # Helper script for angie control
 ARG ANGIE_CTL_REPO="https://github.com/6RUN0/angie-ctl.git"
-ARG ANGIE_CTL_COMMIT="4cc390317462da580d3e63907c68f775de879048"
+ARG ANGIE_CTL_COMMIT="a69c1d102ec99a893a11f08015ea150c1e287482"
 ARG ANGIE_CTL="/usr/local/bin/angie-ctl"
 
 # The angie web server https://angie.software
@@ -68,6 +71,7 @@ RUN \
   angie-module-modsecurity \
   angie-module-subs \
   tini \
+  wget \
   ; \
   ln -sf /dev/stdout /var/log/angie/access.log; \
   ln -sf /dev/stderr /var/log/angie/error.log; \
@@ -91,9 +95,16 @@ RUN \
 
 COPY rootfs/ /
 
+# Validate the baked-in configuration at build time: a broken default config
+# fails the build instead of the first container start.
+RUN angie -t
+
 VOLUME /etc/angie/custom
 
 EXPOSE 80
+
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+  CMD wget -q -O /dev/null http://127.0.0.1/healthz || exit 1
 
 ENTRYPOINT ["tini", "--", "/docker-entrypoint.sh"]
 

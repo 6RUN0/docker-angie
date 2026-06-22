@@ -7,7 +7,7 @@ ARG ANGIE_SIGNING_KEY_URL="https://angie.software/keys/angie-signing.rsa"
 ARG ANGIE_SIGNING_KEY="/etc/apk/keys/angie-signing.rsa"
 # Helper script for angie control
 ARG ANGIE_CTL_REPO="https://github.com/6RUN0/angie-ctl.git"
-ARG ANGIE_CTL_COMMIT="4cc390317462da580d3e63907c68f775de879048"
+ARG ANGIE_CTL_COMMIT="a69c1d102ec99a893a11f08015ea150c1e287482"
 ARG ANGIE_CTL="/usr/local/bin/angie-ctl"
 
 # The angie web server https://angie.software
@@ -53,9 +53,16 @@ RUN \
 
 COPY rootfs/ /
 
+# Validate the baked-in configuration at build time: a broken default config
+# fails the build instead of the first container start.
+RUN angie -t
+
 VOLUME /etc/angie/custom
 
 EXPOSE 80
+
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+  CMD wget -q -O /dev/null http://127.0.0.1/healthz || exit 1
 
 ENTRYPOINT ["tini", "--", "/docker-entrypoint.sh"]
 
