@@ -21,6 +21,11 @@ NGINX_CONFIGS := rootfs/etc/angie/http.d/default.conf \
 # gixy-ng) that runs on current Python. Override GIXY to use another install.
 GIXY ?= uvx --from gixy-ng gixy
 
+# GitHub Actions linters; both expected on PATH like shellcheck/hadolint.
+# Override either to use another install (e.g. ZIZMOR='uvx zizmor').
+ACTIONLINT ?= actionlint
+ZIZMOR ?= zizmor
+
 .DEFAULT_GOAL := help
 
 .PHONY: help
@@ -29,7 +34,7 @@ help: ## Show this help
 		| awk 'BEGIN{FS=":.*?## "}{printf "  \033[36m%-26s\033[0m %s\n", $$1, $$2}'
 
 .PHONY: lint
-lint: lint-shell lint-docker lint-config ## Run all linters
+lint: lint-shell lint-docker lint-config lint-ci ## Run all linters
 
 .PHONY: lint-shell
 lint-shell: ## shellcheck entrypoint (POSIX sh) and test scripts
@@ -40,6 +45,13 @@ lint-shell: ## shellcheck entrypoint (POSIX sh) and test scripts
 lint-docker: ## hadolint all Dockerfiles
 	hadolint $(ALPINE_DOCKERFILE) $(DEBIAN_DOCKERFILE) \
 		$(ALPINE_DOCKERFILE).unprivileged $(DEBIAN_DOCKERFILE).unprivileged
+
+# Accepted zizmor advisories are suppressed inline (`# zizmor: ignore[...]`) at
+# their site, not globally, so new findings still surface at full confidence.
+.PHONY: lint-ci
+lint-ci: ## actionlint + zizmor of the GitHub Actions workflows
+	$(ACTIONLINT) .github/workflows/*.yml
+	$(ZIZMOR) --no-online-audits .github/workflows/*.yml
 
 .PHONY: lint-config
 lint-config: ## gixy security-lint of the standalone vhost config fragments
