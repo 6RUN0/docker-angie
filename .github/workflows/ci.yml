@@ -1,0 +1,83 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - name: shellcheck
+        run: make lint-shell
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6
+      - name: gixy (config security lint)
+        run: make lint-config
+      - name: hadolint (alpine)
+        uses: hadolint/hadolint-action@54c9adbab1582c2ef04b2016b760714a4bfde3cf # v3.1.0
+        with:
+          dockerfile: alpine/Dockerfile
+      - name: hadolint (debian)
+        uses: hadolint/hadolint-action@54c9adbab1582c2ef04b2016b760714a4bfde3cf # v3.1.0
+        with:
+          dockerfile: debian/Dockerfile
+      - name: hadolint (alpine unprivileged)
+        uses: hadolint/hadolint-action@54c9adbab1582c2ef04b2016b760714a4bfde3cf # v3.1.0
+        with:
+          dockerfile: alpine/Dockerfile.unprivileged
+      - name: hadolint (debian unprivileged)
+        uses: hadolint/hadolint-action@54c9adbab1582c2ef04b2016b760714a4bfde3cf # v3.1.0
+        with:
+          dockerfile: debian/Dockerfile.unprivileged
+
+  build-test:
+    needs: lint
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - variant: alpine
+            dockerfile: alpine/Dockerfile
+          - variant: debian
+            dockerfile: debian/Dockerfile
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+      - name: Build image
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          load: true
+          tags: angie-${{ matrix.variant }}:test
+          cache-from: type=gha,scope=${{ matrix.variant }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.variant }}
+      - name: Scan image for CVEs
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: angie-${{ matrix.variant }}:test
+          severity: CRITICAL,HIGH
+          # Fail only on CVEs that have an upstream fix available — the image
+          # tracks upstream security updates, so a fixable CVE means it is stale
+          # and a rebuild resolves it. Unfixed CVEs would block CI with no action
+          # the maintainer can take.
+          ignore-unfixed: true
+          exit-code: '1'
+      - name: Smoke test
+        run: IMAGE=angie-${{ matrix.variant }}:test ./test/smoke.sh
+      - name: Build rootless image
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}.unprivileged
+          load: true
+          build-args: BASE_IMAGE=angie-${{ matrix.variant }}:test
+          tags: angie-${{ matrix.variant }}-unprivileged:test
+      - name: Smoke test (rootless)
+        run: IMAGE=angie-${{ matrix.variant }}-unprivileged:test ./test/smoke-unprivileged.sh

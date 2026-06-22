@@ -1,0 +1,21 @@
+# Dependabot tracks what it can resolve declaratively: base images in the two
+# Dockerfiles (FROM/ARG ...=image:tag) and the GitHub Actions used in workflows.
+#
+# It does NOT track the angie/angie-module-* apt/apk packages (installed inside
+# RUN) nor the angie-ctl pin (ARG ANGIE_CTL_COMMIT, fetched by git): bump those
+# by hand — angie via the upstream release notes, angie-ctl by updating the
+# commit in both Dockerfiles.
+version: 2
+updates:
+  - package-ecosystem: docker
+    directory: /alpine
+    schedule:
+      interval: weekly
+  - package-ecosystem: docker
+    directory: /debian
+    schedule:
+      interval: weekly
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly

@@ -1,0 +1,5 @@
+# The entrypoint scripts source `/docker-entrypoint-common.sh` by its runtime
+# absolute path, which does not exist at lint time. Without this, shellcheck
+# emits SC1091 (info) and exits non-zero, failing `make lint-shell` and the CI
+# lint gate. Suppress it; the sourced file is linted separately on its own.
+disable=SC1091
