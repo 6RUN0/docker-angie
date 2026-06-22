@@ -11,13 +11,27 @@ if [ ! -r "${GEOIP2_DB_COUNTRY}" ]; then
   exit 0
 fi
 
+# The path is substituted into a config directive. Restrict it to a safe charset
+# so the value cannot break out of the geoip2{} block (config injection) or
+# contain a character that aborts the sed substitution below.
+case "$GEOIP2_DB_COUNTRY" in
+*[!A-Za-z0-9._/-]*)
+  ngx_err "GEOIP2_DB_COUNTRY has unsupported characters (allowed: A-Za-z0-9 . _ / -): $GEOIP2_DB_COUNTRY"
+  exit 1
+  ;;
+esac
+
 : "${ANGIE_LOG_FORMAT_LOGFMT_GEOIP2:=no}"
 : "${ANGIE_LOG_LOGFMT_GEOIP2:=no}"
 
 angie-ctl mod en http_geoip2.conf &&
   ngx_info "GeoIP2 module enabled"
 
-sed -i -e "s!%%GEOIP2_DB_COUNTRY%%!$GEOIP2_DB_COUNTRY!g" /etc/angie/http-conf-available.d/025-geoip2.conf
+# Render the active config from the pristine template every start: idempotent
+# across restarts (a changed DB path is re-applied) and the template is never
+# mutated in place. The validated charset above keeps the '|' delimiter safe.
+geoip2_conf="/etc/angie/http-conf-available.d/025-geoip2.conf"
+sed -e "s|%%GEOIP2_DB_COUNTRY%%|$GEOIP2_DB_COUNTRY|g" "${geoip2_conf}.template" >"$geoip2_conf"
 angie-ctl httpconf en 025-geoip2.conf &&
   ngx_info "GeoIP2 database configured: ${GEOIP2_DB_COUNTRY}"
 
