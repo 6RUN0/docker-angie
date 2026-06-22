@@ -1,3 +1,7 @@
+# check=skip=SecretsUsedInArgOrEnv
+# ANGIE_SIGNING_KEY_URL / ANGIE_SIGNING_KEY are a public signing-key URL and the
+# keyring path baked into the image, not secrets; the BuildKit check only flags
+# the "KEY" substring heuristically, so skip it for this build.
 ARG DEBIAN_BASE_IMAGE=debian:trixie-slim
 
 FROM ${DEBIAN_BASE_IMAGE}
