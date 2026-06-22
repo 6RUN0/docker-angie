@@ -101,6 +101,8 @@ if [ -n "$cip" ]; then
   else
     pass "/healthz denied from external client ($cip)"
   fi
+else
+  fail "could not determine container IP to probe /healthz externally"
 fi
 docker rm -f "$cid" >/dev/null
 

@@ -85,6 +85,8 @@ if [ -n "$cip" ]; then
   else
     pass "/healthz denied from external client ($cip)"
   fi
+else
+  fail "could not determine container IP to probe /healthz externally"
 fi
 # Exactly one active access_log to /dev/stdout (regression: double access_log).
 n=$(dump_conf "$cid" | grep -c 'access_log /dev/stdout' || true)

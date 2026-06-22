@@ -106,7 +106,8 @@ rewrites `%%GEOIP2_DB_COUNTRY%%` inside `025-geoip2.conf` before enabling it.
 
 - `.editorconfig`: 2-space indent, LF, UTF-8, final newline, trim trailing ws —
   applies to all files including shell and conf.
-- `.dockerignore` whitelists only `rootfs/` into the build context.
+- `.dockerignore` whitelists only `rootfs/` and `rootfs-unprivileged/` into the
+  build context (the latter is overlaid by the `*.unprivileged` Dockerfiles).
 - Both Dockerfiles pin third-party code by commit (`ANGIE_CTL_COMMIT`) and clone
   with a shallow `x_git_clone` helper; the Debian build also routes apt through a
   configurable mirror. Keep the alpine and debian Dockerfiles in sync when
