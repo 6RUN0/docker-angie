@@ -58,6 +58,13 @@ jobs:
           tags: angie-${{ matrix.variant }}:test
           cache-from: type=gha,scope=${{ matrix.variant }}
           cache-to: type=gha,mode=max,scope=${{ matrix.variant }}
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6
+        if: matrix.variant == 'alpine'
+      - name: gixy (full effective config)
+        # The effective config is identical across variants, so lint it once on
+        # alpine, against the real assembled angie -T (not just the fragments).
+        if: matrix.variant == 'alpine'
+        run: make lint-config-full IMAGE_ALPINE=angie-alpine:test
       - name: Scan image for CVEs
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:

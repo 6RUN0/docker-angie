@@ -42,8 +42,22 @@ lint-docker: ## hadolint all Dockerfiles
 		$(ALPINE_DOCKERFILE).unprivileged $(DEBIAN_DOCKERFILE).unprivileged
 
 .PHONY: lint-config
-lint-config: ## gixy security-lint of nginx/angie vhost configs
+lint-config: ## gixy security-lint of the standalone vhost config fragments
 	$(GIXY) $(NGINX_CONFIGS)
+
+.PHONY: lint-config-full
+lint-config-full: ## gixy security-lint of the full effective config (needs $(IMAGE_ALPINE) built)
+	@cid=$$(docker run -d \
+		-e ANGIE_GZIP_ENABLED=1 -e ANGIE_BROTLI_ENABLED=1 -e ANGIE_MAP_WEBSOCKET_ENABLE=1 \
+		$(IMAGE_ALPINE)); \
+	tmp=$$(mktemp); ok=; \
+	for _ in $$(seq 1 40); do \
+		docker exec $$cid angie -T >"$$tmp" 2>/dev/null && { ok=1; break; }; \
+		sleep 0.25; \
+	done; \
+	docker rm -f $$cid >/dev/null; \
+	if [ -z "$$ok" ]; then echo "lint-config-full: angie -T did not succeed" >&2; rm -f "$$tmp"; exit 1; fi; \
+	$(GIXY) "$$tmp"; rc=$$?; rm -f "$$tmp"; exit $$rc
 
 .PHONY: build
 build: build-alpine build-debian build-alpine-unprivileged build-debian-unprivileged ## Build all images
