@@ -96,12 +96,16 @@ jobs:
       - name: Smoke test
         run: IMAGE=angie-${{ matrix.variant }}:test ./test/smoke.sh
       - name: Build rootless image
-        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
-        with:
-          context: .
-          file: ${{ matrix.dockerfile }}.unprivileged
-          load: true
-          build-args: BASE_IMAGE=angie-${{ matrix.variant }}:test
-          tags: angie-${{ matrix.variant }}-unprivileged:test
+        # Plain `docker build` (the daemon builder), not buildx/build-push-action:
+        # the rootless FROM is the just-built angie-<variant>:test, which lives
+        # only in the daemon image store. The buildx container driver cannot see
+        # daemon images and would try (and fail) to pull it from a registry.
+        env:
+          DOCKERFILE: ${{ matrix.dockerfile }}.unprivileged
+          VARIANT: ${{ matrix.variant }}
+        run: |
+          docker build -f "$DOCKERFILE" \
+            --build-arg "BASE_IMAGE=angie-${VARIANT}:test" \
+            -t "angie-${VARIANT}-unprivileged:test" .
       - name: Smoke test (rootless)
         run: IMAGE=angie-${{ matrix.variant }}-unprivileged:test ./test/smoke-unprivileged.sh
