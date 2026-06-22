@@ -13,6 +13,19 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - name: Install pinned shellcheck
+        # Pin the version: the runner's bundled shellcheck drifts and reports
+        # different findings than developers run locally (e.g. SC2015), making
+        # the lint gate non-reproducible. Verify the download by checksum.
+        env:
+          SC_VERSION: v0.11.0
+          SC_SHA256: 8c3be12b05d5c177a04c29e3c78ce89ac86f1595681cab149b65b97c4e227198
+        run: |
+          curl -fsSL -o sc.tar.xz "https://github.com/koalaman/shellcheck/releases/download/${SC_VERSION}/shellcheck-${SC_VERSION}.linux.x86_64.tar.xz"
+          echo "${SC_SHA256}  sc.tar.xz" | sha256sum -c -
+          tar -xJf sc.tar.xz
+          sudo install "shellcheck-${SC_VERSION}/shellcheck" /usr/local/bin/shellcheck
+          shellcheck --version
       - name: shellcheck
         run: make lint-shell
       - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6
@@ -60,6 +73,10 @@ jobs:
           cache-to: type=gha,mode=max,scope=${{ matrix.variant }}
       - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6
         if: matrix.variant == 'alpine'
+        with:
+          # One-shot `uvx gixy`; caching is pointless and only adds a
+          # cache-poisoning surface next to the build cache in this job.
+          enable-cache: false
       - name: gixy (full effective config)
         # The effective config is identical across variants, so lint it once on
         # alpine, against the real assembled angie -T (not just the fragments).
