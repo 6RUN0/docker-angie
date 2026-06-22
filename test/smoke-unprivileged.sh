@@ -64,6 +64,19 @@ for u in 10000:10000 4242:0 1000:1000; do
   docker rm -f "$cid" >/dev/null
 done
 
+# --- Clean rootless startup: no inert `user` directive warning -------------
+# The rootless Dockerfile strips `user angie;` from angie.conf because a non-root
+# master cannot honor it and Angie would log a [warn] every start. Guard against
+# the directive (or the override step) regressing back in.
+cid=$(start --user 10000:10000)
+wait_healthy "$cid" || fail "container healthy for warn check"
+logs=$(docker logs "$cid" 2>&1)
+case "$logs" in
+*'"user" directive'*) fail "rootless start logs an inert 'user' directive warning" ;;
+*) pass "rootless start has no inert 'user' directive warning" ;;
+esac
+docker rm -f "$cid" >/dev/null
+
 # --- Default user owns config dirs: runtime ANGIE_* toggles apply ----------
 cid=$(start -e ANGIE_BROTLI_ENABLED=yes)
 if wait_healthy "$cid" &&
@@ -89,6 +102,12 @@ docker rm -f "$cid" >/dev/null
 # --- /healthz loopback-only; unknown host 444 ------------------------------
 cid=$(start --user 10000:10000)
 wait_healthy "$cid" || fail "container healthy for endpoint checks"
+body=$(docker exec "$cid" wget -q -O - "http://127.0.0.1:$PORT/healthz" 2>/dev/null || true)
+if [ "$body" = "ok" ]; then
+  pass "/healthz body is exactly 'ok'"
+else
+  fail "/healthz body is exactly 'ok' (got '$body')"
+fi
 if docker exec "$cid" wget -q -O /dev/null "http://127.0.0.1:$PORT/" 2>/dev/null; then
   fail "default server denies unknown host (expected 444/closed)"
 else

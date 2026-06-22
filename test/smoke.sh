@@ -70,6 +70,10 @@ if wait_healthy "$cid"; then
 else
   fail "container becomes healthy (/healthz 200)"
 fi
+# The classifier must return the body, not just a reachable status: wget -O- so a
+# regression that answers 200 with the wrong payload is caught.
+body=$(docker exec "$cid" wget -q -O - http://127.0.0.1/healthz 2>/dev/null || true)
+assert_eq "$body" "ok" "/healthz body is exactly 'ok'"
 if docker exec "$cid" wget -q -O /dev/null http://127.0.0.1/ 2>/dev/null; then
   fail "default server denies unknown host (expected 444/closed)"
 else
@@ -115,6 +119,97 @@ else
   fail "missing GeoIP DB does not break startup"
 fi
 docker rm -f "$cid" >/dev/null
+
+# --- 4b. GeoIP2 path charset validation: a *readable* DB whose path holds an
+#     unsafe character (here a space) must be rejected, aborting startup, not
+#     silently substituted into the config (injection guard in 50-geoip2.sh).
+#     The readability check in that script runs first, so the probe file must
+#     exist for the charset branch to be exercised.
+tmp=$(mktemp -d)
+: >"$tmp/db evil.mmdb"
+chmod a+r "$tmp/db evil.mmdb"
+set +e
+timeout 30 docker run --rm -v "$tmp:/geo:ro" \
+  -e GEOIP2_DB_COUNTRY='/geo/db evil.mmdb' "$IMAGE" >/dev/null 2>&1
+rc=$?
+set -e
+rm -rf "$tmp"
+if [ "$rc" -ne 0 ] && [ "$rc" -ne 124 ]; then
+  pass "GeoIP2 rejects an unsafe DB path charset (exit $rc)"
+else
+  fail "GeoIP2 rejects an unsafe DB path charset (got exit $rc; 124=timeout means it started anyway)"
+fi
+
+# --- 4c. Static precompression variants -------------------------------------
+cid=$(start -e ANGIE_GZIP_STATIC_ENABLE=1)
+wait_healthy "$cid" || fail "gzip_static container healthy"
+assert_contains "$(dump_conf "$cid")" "gzip_static on" "ANGIE_GZIP_STATIC_ENABLE enables gzip_static"
+docker rm -f "$cid" >/dev/null
+
+cid=$(start -e ANGIE_BROTLI_STATIC_ENABLE=1)
+wait_healthy "$cid" || fail "brotli_static container healthy"
+conf=$(dump_conf "$cid")
+assert_contains "$conf" "brotli_static on" "ANGIE_BROTLI_STATIC_ENABLE enables brotli_static"
+assert_contains "$conf" "brotli on" "brotli_static also pulls in base brotli"
+docker rm -f "$cid" >/dev/null
+
+# --- 4d. Independent module/map toggles loaded together ---------------------
+# ModSecurity and subs are bare load_module; the websocket map is an http snippet.
+# They compose without conflict, so one container exercises all three with
+# independent assertions.
+cid=$(start -e ANGIE_MODSECURITY_ENABLE=1 -e ANGIE_SUBS_ENABLE=1 -e ANGIE_MAP_WEBSOCKET_ENABLE=1)
+if wait_healthy "$cid"; then
+  pass "WAF + subs + websocket: container starts with all three enabled"
+else
+  fail "WAF + subs + websocket: container starts with all three enabled"
+  docker logs "$cid" 2>&1 | grep -iE 'emerg|\[error\]' | head -3 || true
+fi
+mods=$(docker exec "$cid" ls /etc/angie/modules.d/ 2>/dev/null || true)
+assert_contains "$mods" "http_modsecurity.conf" "ANGIE_MODSECURITY_ENABLE loads the WAF module"
+assert_contains "$mods" "http_subs_filter.conf" "ANGIE_SUBS_ENABLE loads the subs module"
+assert_contains "$(dump_conf "$cid")" "connection_upgrade" "ANGIE_MAP_WEBSOCKET_ENABLE adds the websocket map"
+docker rm -f "$cid" >/dev/null
+
+# --- 4e. Access-log format switch keeps exactly one access_log --------------
+# Regression guard for double access_log when a non-default format is selected.
+# logfmt is the default and is matched before main in 40-log.sh, so it must be
+# turned off explicitly for main to win.
+cid=$(start -e ANGIE_LOG_LOGFMT=no -e ANGIE_LOG_MAIN=1)
+wait_healthy "$cid" || fail "log-main container healthy"
+conf=$(dump_conf "$cid")
+n=$(printf '%s\n' "$conf" | grep -c 'access_log /dev/stdout' || true)
+assert_eq "$n" "1" "switching to main format keeps exactly one access_log"
+assert_contains "$conf" "access_log /dev/stdout main" "ANGIE_LOG_MAIN selects the main format"
+docker rm -f "$cid" >/dev/null
+
+# --- 4f. worker_processes autotune rewrites `auto` to a concrete count -------
+cid=$(start -e ANGIE_ENTRYPOINT_WORKER_PROCESSES_AUTOTUNE=1)
+wait_healthy "$cid" || fail "autotune container healthy"
+wp=$(docker exec "$cid" grep -E '^worker_processes [0-9]+;' /etc/angie/angie.conf 2>/dev/null || true)
+if [ -n "$wp" ]; then
+  pass "autotune rewrites worker_processes to a number ($wp)"
+else
+  fail "autotune rewrites worker_processes to a concrete count"
+fi
+docker rm -f "$cid" >/dev/null
+
+# --- 4g. Custom volume: a user vhost mounted under /etc/angie/custom applies -
+# Exercises the parallel custom/ include convention (angie.conf includes both the
+# baked tree and /etc/angie/custom/...). A mounted server must reach angie -T.
+ctmp=$(mktemp -d)
+cat >"$ctmp/zz-custom.conf" <<'CONF'
+server {
+  listen 80;
+  server_name custom.smoke.test;
+  location = /_custom_marker { return 200 "marker\n"; }
+}
+CONF
+cid=$(start -v "$ctmp:/etc/angie/custom/http.d:ro")
+wait_healthy "$cid" || fail "custom-volume container healthy"
+assert_contains "$(dump_conf "$cid")" "custom.smoke.test" \
+  "custom volume vhost is included in the effective config"
+docker rm -f "$cid" >/dev/null
+rm -rf "$ctmp"
 
 # --- 5. Entrypoint fail-fast: a failing config script stops the container ---
 tmp=$(mktemp -d)
