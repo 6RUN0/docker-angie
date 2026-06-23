@@ -7,6 +7,11 @@ on:
 permissions:
   contents: read
 
+env:
+  # Docker Hub repository (namespace/repo) the images are mirrored to, alongside
+  # GHCR. Override here if the Docker Hub namespace ever changes.
+  DOCKERHUB_REPO: 6run0/angie
+
 jobs:
   release:
     runs-on: ubuntu-latest
@@ -36,25 +41,33 @@ jobs:
         run: |
           set -eu
           ver=${REF_NAME#v}                                  # v1.2.3 -> 1.2.3
-          base="ghcr.io/$(printf '%s' "$REPO" | tr '[:upper:]' '[:lower:]')"
-          # The immutable, fully-qualified tag is always published.
-          tags="$base:${ver}-${VARIANT}"
-          # Floating tags (major.minor, channel, latest) only for stable releases:
-          # a SemVer prerelease (contains '-', e.g. 1.2.3-rc1) must not move them.
-          case "$ver" in
-          *-*) ;;
-          *)
-            # major.minor floating tag only for a 3-component X.Y.Z release; a
-            # 2-component tag (e.g. v1.2) would otherwise yield a bare major tag.
+          ghcr="ghcr.io/$(printf '%s' "$REPO" | tr '[:upper:]' '[:lower:]')"
+          hub="docker.io/${DOCKERHUB_REPO}"
+          # Append the full tag set for one registry base to $tags. The immutable,
+          # fully-qualified tag is always published; floating tags (major.minor,
+          # channel, latest) only for stable releases: a SemVer prerelease
+          # (contains '-', e.g. 1.2.3-rc1) must not move them.
+          append_tags() {
+            base=$1
+            tags="${tags:+$tags,}$base:${ver}-${VARIANT}"
             case "$ver" in
-            *.*.*) tags="$tags,$base:${ver%.*}-${VARIANT}" ;;
+            *-*) ;;
+            *)
+              # major.minor floating tag only for a 3-component X.Y.Z release; a
+              # 2-component tag (e.g. v1.2) would otherwise yield a bare major tag.
+              case "$ver" in
+              *.*.*) tags="$tags,$base:${ver%.*}-${VARIANT}" ;;
+              esac
+              tags="$tags,$base:${VARIANT}"
+              if [ "$LATEST" = "true" ]; then
+                tags="$tags,$base:latest"
+              fi
+              ;;
             esac
-            tags="$tags,$base:${VARIANT}"
-            if [ "$LATEST" = "true" ]; then
-              tags="$tags,$base:latest"
-            fi
-            ;;
-          esac
+          }
+          tags=""
+          append_tags "$ghcr"   # GitHub Container Registry
+          append_tags "$hub"    # Docker Hub
           printf 'tags=%s\n' "$tags" >>"$GITHUB_OUTPUT"
 
       - uses: docker/setup-qemu-action@06116385d9baf250c9f4dcb4858b16962ea869c3 # v4.1.0
@@ -64,6 +77,11 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4.2.0
+        with:
+          # registry omitted -> defaults to Docker Hub (docker.io).
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Build and push
         uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7.2.0
@@ -102,24 +120,32 @@ jobs:
         run: |
           set -eu
           ver=${REF_NAME#v}
-          base="ghcr.io/$(printf '%s' "$REPO" | tr '[:upper:]' '[:lower:]')"
+          ghcr="ghcr.io/$(printf '%s' "$REPO" | tr '[:upper:]' '[:lower:]')"
+          hub="docker.io/${DOCKERHUB_REPO}"
           sfx="${VARIANT}-unprivileged"
-          # The immutable, fully-qualified tag is always published.
-          tags="$base:${ver}-${sfx}"
-          # Floating tags only for stable releases (see the base release job).
-          case "$ver" in
-          *-*) ;;
-          *)
-            # major.minor floating tag only for a 3-component X.Y.Z release.
+          # Append the full tag set for one registry base to $tags. The immutable,
+          # fully-qualified tag is always published; floating tags only for stable
+          # releases (see the base release job).
+          append_tags() {
+            base=$1
+            tags="${tags:+$tags,}$base:${ver}-${sfx}"
             case "$ver" in
-            *.*.*) tags="$tags,$base:${ver%.*}-${sfx}" ;;
+            *-*) ;;
+            *)
+              # major.minor floating tag only for a 3-component X.Y.Z release.
+              case "$ver" in
+              *.*.*) tags="$tags,$base:${ver%.*}-${sfx}" ;;
+              esac
+              tags="$tags,$base:${sfx}"
+              ;;
             esac
-            tags="$tags,$base:${sfx}"
-            ;;
-          esac
-          # The rootless image is built FROM the just-pushed base tag.
+          }
+          tags=""
+          append_tags "$ghcr"   # GitHub Container Registry
+          append_tags "$hub"    # Docker Hub
           printf 'tags=%s\n' "$tags" >>"$GITHUB_OUTPUT"
-          printf 'base=%s:%s-%s\n' "$base" "$ver" "$VARIANT" >>"$GITHUB_OUTPUT"
+          # The rootless image is built FROM the just-pushed base tag (GHCR).
+          printf 'base=%s:%s-%s\n' "$ghcr" "$ver" "$VARIANT" >>"$GITHUB_OUTPUT"
 
       - uses: docker/setup-qemu-action@06116385d9baf250c9f4dcb4858b16962ea869c3 # v4.1.0
       - uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # v4.1.0
@@ -128,6 +154,11 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4.2.0
+        with:
+          # registry omitted -> defaults to Docker Hub (docker.io).
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Build and push (rootless)
         uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7.2.0
@@ -140,3 +171,18 @@ jobs:
           tags: ${{ steps.tags.outputs.tags }}
           cache-from: type=gha,scope=${{ matrix.variant }}-unprivileged
           cache-to: type=gha,mode=max,scope=${{ matrix.variant }}-unprivileged
+
+  dockerhub-description:
+    # Mirror docs/dockerhub-overview.md into the Docker Hub repository overview.
+    # Runs once per release (not per variant) after the base images are published.
+    needs: release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0 # zizmor: ignore[artipacked] (no git push; persisted token unused)
+      - name: Sync README to Docker Hub overview
+        uses: peter-evans/dockerhub-description@1b9a80c056b620d92cedb9d9b5a223409c68ddfa # v5.0.0
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          repository: ${{ env.DOCKERHUB_REPO }}
+          readme-filepath: ./docs/dockerhub-overview.md

@@ -1,180 +1,143 @@
-# Angie Docker Images with Extended Modules
+# Angie Docker image with Brotli, GeoIP2, ModSecurity (WAF), and substitutions
 
-This repository provides custom Docker images for the [Angie web server](https://angie.software)
-with additional modules and configuration options.
-It supports both Alpine and Debian bases and includes modules
-for Brotli compression, GeoIP2, ModSecurity (WAF), and the substitutions filter.
+Production-ready [Angie](https://angie.software) (an nginx fork) packaged with four
+dynamic modules, runtime feature toggles, and a non-root variant.
 
-## Modules included
+[![CI](https://github.com/6RUN0/docker-angie/actions/workflows/ci.yml/badge.svg)](https://github.com/6RUN0/docker-angie/actions/workflows/ci.yml)
+[![Docker pulls](https://img.shields.io/docker/pulls/6run0/angie)](https://hub.docker.com/r/6run0/angie)
+[![Image size](https://img.shields.io/docker/image-size/6run0/angie/alpine?label=alpine%20size)](https://hub.docker.com/r/6run0/angie/tags)
+[![Architectures](https://img.shields.io/badge/arch-amd64%20%7C%20arm64-blue)](#pull)
+[![License: MIT](https://img.shields.io/github/license/6RUN0/docker-angie)](LICENSE)
+[![Status: alpha](https://img.shields.io/badge/status-alpha-orange)](#versioning)
 
-The following third‑party modules are compiled and available:
+The bundled modules — Brotli, GeoIP2, ModSecurity (WAF), and the substitutions
+filter — ship **disabled** and are switched on at container start through
+`ANGIE_*` environment variables. Two bases are published: **Alpine** (default)
+and **Debian**, each with a rootless **unprivileged** variant.
 
-- [ngx_brotli](https://github.com/google/ngx_brotli) - dynamic and static Brotli compression.
-- [ngx_http_geoip2_module](https://github.com/leev/ngx_http_geoip2_module) - GeoIP2 lookup by client IP.
-- [ModSecurity‑nginx](https://github.com/owasp-modsecurity/ModSecurity-nginx) - ModSecurity web application firewall.
-- [ngx_http_substitutions_filter_module](https://github.com/yaoweibin/ngx_http_substitutions_filter_module) - response body substitutions.
+## Prerequisites
 
-These modules are shipped as dynamic modules.
-They are not enabled automatically; you need to turn them
-on at runtime through the environment variables documented below.
+- Docker Engine 20.10+ (or any runtime that can pull OCI images).
+- To build multi-arch images yourself: Docker with the `buildx` plugin.
+- The default image binds port **80** inside the container; the unprivileged
+  variant binds **8080** and runs as a non-root user.
 
-## Volumes
+## Pull
 
-- `/etc/angie/custom` — for custom Angie configuration
-
-## Environment Variables
-
-| Variable | Description | Default |
-| -------- | ----------- | ------- |
-| `ANGIE_ENTRYPOINT_QUIET_LOGS` | Suppress informational messages from the entrypoint (only warnings and errors will be printed). | unset |
-| `ANGIE_ENTRYPOINT_WORKER_PROCESSES_AUTOTUNE` | Tune `worker_processes` at runtime based on the number of CPU cores (has no effect if `/etc/angie/angie.conf` is read‑only). | unset |
-| `ANGIE_BROTLI_ENABLED` | Load the Brotli filter module and enable Brotli compression. | `no` |
-| `ANGIE_BROTLI_STATIC_ENABLE` | Enable Brotli plus serving pre‑compressed files (`*.br`). Implies `ANGIE_BROTLI_ENABLED`. | `no` |
-| `ANGIE_GZIP_ENABLED` | Enable gzip compression. | `no` |
-| `ANGIE_GZIP_STATIC_ENABLE` | Enable serving pre‑compressed gzip files (`*.gz`). Implies `ANGIE_GZIP_ENABLED`. | `no` |
-| `ANGIE_MODSECURITY_ENABLE` | Enable the ModSecurity module. | `no` |
-| `ANGIE_SUBS_ENABLE` | Enable the substitutions filter module. | `no` |
-| `GEOIP2_DB_COUNTRY` | Absolute path to a GeoIP2 country database. When set and the file is readable, the GeoIP2 module and its configuration are enabled. | unset |
-| `ANGIE_LOG_FORMAT_EXTENDED` | Register the `extended` log format. Does not change the active log unless one of the `ANGIE_LOG_*` variables below is set. | `no` |
-| `ANGIE_LOG_FORMAT_LOGFMT` | Register the `logfmt` log format (key=value pairs). Enabled by default because this format is used for the default access log. | `yes` |
-| `ANGIE_LOG_FORMAT_MAIN` | Register the classic `main` log format. | `no` |
-| `ANGIE_LOG_FORMAT_MATOMO` | Register the `matomo` log format compatible with the Matomo analytics platform. | `no` |
-| `ANGIE_LOG_EXTENDED` | Use the `extended` log format for `/dev/stdout`. | `no` |
-| `ANGIE_LOG_LOGFMT` | Use the `logfmt` log format for `/dev/stdout`. | `yes` |
-| `ANGIE_LOG_MAIN` | Use the `main` log format for `/dev/stdout`. | `no` |
-| `ANGIE_LOG_MATOMO` | Use the `matomo` log format for `/dev/stdout`. | `no` |
-| `ANGIE_LOG_FORMAT_LOGFMT_GEOIP2` | When using GeoIP2, register the `logfmt-with-geoip2` log format (adds a `country` field) without activating it. | `no` |
-| `ANGIE_LOG_LOGFMT_GEOIP2` | When using GeoIP2, use the `logfmt-with-geoip2` log format for `/dev/stdout`. | `no` |
-| `ANGIE_MAP_WEBSOCKET_ENABLE` | Enable the WebSocket variable map configuration to simplify upstream WebSocket proxying. | `no` |
-| `CACHE_DIR` | If set, the entrypoint will change ownership of the specified cache directory to the `angie` user (useful with a bind‑mounted cache). | unset |
-
-## Building
-
-Use the provided Dockerfiles to build the images yourself:
+Images are published on every tagged `v*` release to two registries, for
+`linux/amd64` and `linux/arm64`:
 
 ```bash
-# Build Alpine‑based image
-docker build -t angie‑alpine -f alpine/Dockerfile .
-# Build Debian‑based image
-docker build -t angie‑debian -f debian/Dockerfile .
+# GitHub Container Registry
+docker pull ghcr.io/6run0/docker-angie:alpine
+
+# Docker Hub
+docker pull 6run0/angie:alpine
 ```
 
-Alternatively, use the included `docker‑compose.yml` to build and run all variants:
+Pin an immutable tag for reproducible deployments — see [Versioning](#versioning).
+
+## Quick start
 
 ```bash
-docker compose up --build
+docker run -d --name angie -p 8080:80 6run0/angie:alpine
 ```
 
-### Build arguments
-
-- `DEBIAN_MIRROR` / `DEBIAN_SECURITY_MIRROR` (Debian only) default to the
-  official `https://deb.debian.org`. Point them at a local mirror to speed up
-  builds:
-
-  ```bash
-  docker build -t angie-debian -f debian/Dockerfile \
-    --build-arg DEBIAN_MIRROR=http://mirror.example.org/debian \
-    --build-arg DEBIAN_SECURITY_MIRROR=http://mirror.example.org/debian-security .
-  ```
-
-- `ANGIE_CTL_COMMIT` pins the commit of the angie-ctl helper.
-
-### Makefile
-
-A `Makefile` orchestrates the common tasks:
+Confirm it is live via the same loopback endpoint the built-in HEALTHCHECK uses
+(`/healthz` is intentionally loopback-only, so query it from inside the
+container):
 
 ```bash
-make lint     # shellcheck (POSIX sh) + hadolint
-make build    # build both images
-make test     # build + smoke-test both images
+docker exec angie wget -qO- http://127.0.0.1/healthz   # -> ok
 ```
 
-## Notes
+From the host, every request to an unmatched host returns `444` (connection
+closed) — add your own server blocks via the custom-config volume to serve real
+traffic.
 
-- The default configuration increases `worker_connections` and `worker_rlimit_nofile` to 65536
-to support high concurrency. Adjust these values in `rootfs/etc/angie/angie.conf` if necessary.
+## Usage
 
-- The entrypoint installs **angie‑ctl** (from the commit specified in the build argument `ANGIE_CTL_COMMIT`) into `/usr/local/bin`.
-This utility is used to enable or disable configuration snippets and modules at runtime.
-
-## Health check
-
-Both images define a `HEALTHCHECK` that probes `GET /healthz` on port 80 — the
-default server answers it with `200 ok`. Every other request to an unmatched
-host is denied with `444` (connection closed), which drops scanner / stray
-Host-header noise. Add your own server blocks via the custom volume to serve
-real traffic.
-
-## Configuration is applied at container creation
-
-The entrypoint enables snippets and (optionally) rewrites `worker_processes`
-once, at container start, and guards against re-applying. Changing an `ANGIE_*`
-variable therefore takes effect by **recreating** the container, not by
-`docker restart` (a restart reuses the already-configured writable layer). Treat
-the container as disposable: change env, recreate.
-
-## Running as non-root
-
-The default images run as root and the Angie master drops worker processes to
-the `angie` user — the conventional nginx model. Under `docker run --user` the
-entrypoint skips privileged setup (ownership fixes, `worker_processes` autotune)
-with a notice, but the regular image is **not** fully rootless: angie still needs
-root-owned paths (pidfile, temp dirs) and binds port 80.
-
-For a fully rootless deployment use the **unprivileged** image variant, built on
-top of the regular one (`alpine/Dockerfile.unprivileged`,
-`debian/Dockerfile.unprivileged`). It runs as a dedicated `app` user (uid/gid
-`65532`, created by the image rather than reusing the angie package user), moves
-the pidfile and temp paths into `/tmp`, and listens on **8080**, so it runs under
-any uid with no added capabilities:
+Enable features with `ANGIE_*` variables and mount your config:
 
 ```bash
-make build-alpine-unprivileged          # or build-debian-unprivileged
-# Default user is app (uid/gid 65532), which owns /etc/angie/*.d, so ANGIE_* toggles apply:
-docker run -e ANGIE_BROTLI_ENABLED=yes -p 8080:8080 angie-alpine-unprivileged
-# ...or pin any uid; toggling then falls back to the build-time config:
-docker run --user 65534:65534 -p 8080:8080 angie-alpine-unprivileged
+docker run -d --name angie \
+  -p 80:80 \
+  -e ANGIE_BROTLI_ENABLED=yes \
+  -e ANGIE_GZIP_ENABLED=yes \
+  -v "$PWD/angie-config:/etc/angie/custom:ro" \
+  6run0/angie:alpine
 ```
 
-The `app` user owns `/etc/angie/*.d`, so runtime `ANGIE_*` toggles work under the
-default user. A foreign `docker run --user <uid>` that does not own those dirs
-cannot rewrite them: toggling is skipped with a warning and the baked build-time
-config serves. Customize further via the `/etc/angie/custom` volume or by
-deriving your own image. The user identity is configurable at build time via the
-`APP_USER`/`APP_GROUP`/`APP_UID`/`APP_GID` build args (defaults `app`/`app`/`65532`/`65532`).
+Rootless deployment (listens on 8080, runs as uid/gid 65532):
 
-## ModSecurity (WAF)
+```bash
+docker run -d -p 8080:8080 6run0/angie:alpine-unprivileged
+```
 
-`ANGIE_MODSECURITY_ENABLE=yes` loads the ModSecurity module, but the image ships
-**no rules** — enabling it alone blocks nothing. Provide an engine config and a
-ruleset (e.g. the [OWASP Core Rule Set](https://coreruleset.org/)) through the
-`/etc/angie/custom` volume and reference them from a server or location:
+- Compose examples → [docs/compose.md](docs/compose.md)
+- Building the images from source → [docs/usage.md](docs/usage.md)
 
-1. Mount a `modsecurity.conf` with `SecRuleEngine On` plus your `Include`
-   directives, and the rules themselves, under `/etc/angie/custom`.
-2. Turn it on in a custom server block:
+## Configuration
 
-   ```nginx
-   # /etc/angie/custom/http.d/app.conf
-   server {
-     listen 80;
-     server_name app.example.com;
+Key toggles (full table of 20+ variables in
+[docs/configuration.md](docs/configuration.md)):
 
-     modsecurity on;
-     modsecurity_rules_file /etc/angie/custom/modsecurity/main.conf;
+| Variable | Default | Description |
+| --- | --- | --- |
+| `ANGIE_BROTLI_ENABLED` | `no` | Load the Brotli module and enable Brotli compression. |
+| `ANGIE_GZIP_ENABLED` | `no` | Enable gzip compression. |
+| `ANGIE_MODSECURITY_ENABLE` | `no` | Enable the ModSecurity WAF module. |
+| `ANGIE_SUBS_ENABLE` | `no` | Enable the response-body substitutions filter. |
+| `GEOIP2_DB_COUNTRY` | unset | Path to a GeoIP2 country DB; enables GeoIP2 when readable. |
+| `ANGIE_MAP_WEBSOCKET_ENABLE` | `no` | Enable the WebSocket upgrade variable map. |
+| `ANGIE_ENTRYPOINT_WORKER_PROCESSES_AUTOTUNE` | unset | Tune `worker_processes` to the CPU count at start. |
 
-     # ... your locations ...
-   }
-   ```
+Mount custom configuration at the **`/etc/angie/custom`** volume.
 
-## Testing
+## Data and state
 
-`make test` builds each image and runs `test/smoke.sh`, which starts the
-container and asserts the toggles (gzip / brotli / log format), the `/healthz`
-and `444` behavior, fail-fast on a broken entrypoint script, and non-root
-startup. CI runs the same on every push and pull request; tagged `v*` releases
-publish multi-arch images to `ghcr.io`.
+The image is **stateless** — all runtime config is derived from `ANGIE_*`
+variables and the `/etc/angie/custom` volume at container start; nothing is
+written that needs backing up. Configuration is applied **once at creation**, so
+changing an `ANGIE_*` variable takes effect on container **recreate**, not
+`docker restart`. The unprivileged image runs as uid/gid `65532` and owns
+`/etc/angie/*.d`; see [docs/security.md](docs/security.md) for running under a
+foreign `--user`.
 
-## See also
+## Limitations
 
-- [Angie installation](https://angie.software/installation/)
+- ModSecurity loads the engine only — no rule set ships by default; bring your
+  own (e.g. the OWASP CRS).
+- The bundled modules are dynamic and off until toggled.
+- Full list → [docs/limitations.md](docs/limitations.md).
+
+## Versioning
+
+Tags follow the upstream release version with a variant suffix:
+
+| Tag | Meaning |
+| --- | --- |
+| `<x.y.z>-alpine`, `<x.y.z>-debian` | Immutable, fully-qualified — **pin this**. |
+| `<x.y>-alpine` | Latest patch of a minor line (stable releases only). |
+| `alpine`, `debian` | Latest stable of that base. |
+| `latest` | Latest stable **Alpine** image. |
+| `*-unprivileged` | Rootless variant; suffixes the base/version tags (e.g. `alpine-unprivileged`, `<x.y.z>-alpine-unprivileged`), but not `latest`. |
+
+Floating tags move only for stable `x.y.z` releases; a prerelease (e.g.
+`1.2.3-rc1`) publishes its immutable tag only.
+
+## Documentation
+
+- [Configuration](docs/configuration.md) — full env/volume/port reference
+- [Usage](docs/usage.md) — building, entrypoint, logs, exit codes
+- [Compose](docs/compose.md) — ready-to-run compose files
+- [Security](docs/security.md) — non-root, capabilities, secrets
+- [Limitations](docs/limitations.md) — known boundaries
+- [Troubleshooting](docs/troubleshooting.md) — common errors
+
+Russian: [README.ru.md](README.ru.md).
+
+## License
+
+[MIT](LICENSE) for this packaging. Angie and the bundled third-party modules
+retain their own respective licenses.
