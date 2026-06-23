@@ -5,8 +5,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## What this repo is
 
 Docker image build for the [Angie web server](https://angie.software) (an nginx
-fork) bundled with four dynamic modules: Brotli, GeoIP2, ModSecurity (WAF), and
-the substitutions filter. Two base variants are built from the same `rootfs/`:
+fork) bundled with five dynamic modules: Brotli, Zstandard, GeoIP2, ModSecurity
+(WAF), and the substitutions filter. Two base variants are built from the same `rootfs/`:
 `alpine/Dockerfile` and `debian/Dockerfile`. There is no application source code
 here — the deliverable is the image, its entrypoint scripts, and the Angie
 configuration tree.
@@ -69,8 +69,9 @@ into the active `.d/` dir.
   `ANGIE_ENTRYPOINT_QUIET_LOGS`) and the `enable_log_format`/`enable_log` helpers.
   Logging goes to fd 3, which maps to stderr or `/dev/null` when quiet.
 - `rootfs/docker-entrypoint.d/NN-*.sh` — one feature toggle per file, numbered to
-  control order (30 tune, 40 features, 50 geoip2, 60 websocket, 90 permission
-  fixups). Each reads its `ANGIE_*` env var and calls `angie-ctl` to enable the
+  control order (30 tune, 35 real-ip, 40 features, 45 security headers,
+  50 geoip2, 60 websocket, 90 permission fixups). Each reads its `ANGIE_*` env
+  var and calls `angie-ctl` to enable the
   corresponding snippet. The conventional toggle pattern is:
 
   ```sh

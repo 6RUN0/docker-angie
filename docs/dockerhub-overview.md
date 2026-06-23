@@ -1,6 +1,6 @@
-# Angie + Brotli, GeoIP2, ModSecurity (WAF), substitutions
+# Angie + Brotli, Zstandard, GeoIP2, ModSecurity (WAF), substitutions
 
-[Angie](https://angie.software) (an nginx fork) with four dynamic modules and
+[Angie](https://angie.software) (an nginx fork) with five dynamic modules and
 runtime feature toggles. Modules ship disabled and are switched on at container
 start via `ANGIE_*` environment variables. Bases: **Alpine** (default) and
 **Debian**, each with a rootless **unprivileged** variant.
@@ -34,7 +34,7 @@ uid/gid `65532`.
 
 | Tag | Meaning |
 | --- | --- |
-| `1.11.8-build1-alpine`, `…-debian` | Immutable — exact Angie version + build. Pin this. |
+| `1.11.8-build2-alpine`, `…-debian` | Immutable — exact Angie version + build. Pin this. |
 | `1.11.8-alpine` | Latest build of that Angie patch. |
 | `1.11-alpine` | Latest patch of that Angie minor line. |
 | `alpine`, `debian` | Latest stable of that base. |
@@ -85,7 +85,7 @@ uid/gid `65532`.
 
 | Тег | Значение |
 | --- | --- |
-| `1.11.8-build1-alpine`, `…-debian` | Неизменяемый — точная версия Angie + сборка. Фиксируйте его. |
+| `1.11.8-build2-alpine`, `…-debian` | Неизменяемый — точная версия Angie + сборка. Фиксируйте его. |
 | `1.11.8-alpine` | Последняя сборка этого патча Angie. |
 | `1.11-alpine` | Последний патч этой минорной линии Angie. |
 | `alpine`, `debian` | Последний стабильный образ этой базы. |

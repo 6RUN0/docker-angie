@@ -1,6 +1,6 @@
-# Angie Docker image with Brotli, GeoIP2, ModSecurity (WAF), and substitutions
+# Angie Docker image with Brotli, Zstandard, GeoIP2, ModSecurity (WAF), and substitutions
 
-Production-ready [Angie](https://angie.software) (an nginx fork) packaged with four
+Production-ready [Angie](https://angie.software) (an nginx fork) packaged with five
 dynamic modules, runtime feature toggles, and a non-root variant.
 
 [![CI](https://github.com/6RUN0/docker-angie/actions/workflows/ci.yml/badge.svg)](https://github.com/6RUN0/docker-angie/actions/workflows/ci.yml)
@@ -10,10 +10,11 @@ dynamic modules, runtime feature toggles, and a non-root variant.
 [![License: MIT](https://img.shields.io/github/license/6RUN0/docker-angie)](LICENSE)
 [![Status: alpha](https://img.shields.io/badge/status-alpha-orange)](#versioning)
 
-The bundled modules — Brotli, GeoIP2, ModSecurity (WAF), and the substitutions
-filter — ship **disabled** and are switched on at container start through
-`ANGIE_*` environment variables. Two bases are published: **Alpine** (default)
-and **Debian**, each with a rootless **unprivileged** variant.
+The bundled modules — Brotli, Zstandard, GeoIP2, ModSecurity (WAF), and the
+substitutions filter — ship **disabled** and are switched on at container
+start through `ANGIE_*` environment variables. Two bases are published:
+**Alpine** (default) and **Debian**, each with a rootless **unprivileged**
+variant.
 
 ## Prerequisites
 
@@ -124,12 +125,12 @@ label (`docker inspect`) and via `angie -v`.
 
 | Tag | Meaning |
 | --- | --- |
-| `1.11.8-build1-alpine`, `…-debian` | Immutable — exact Angie version and packaging. **Pin this.** |
+| `1.11.8-build2-alpine`, `…-debian` | Immutable — exact Angie version and packaging. **Pin this.** |
 | `1.11.8-alpine` | Latest build of that Angie patch. |
 | `1.11-alpine` | Latest patch of that Angie minor line. |
 | `alpine`, `debian` | Latest stable of that base. |
 | `latest` | Latest stable **Alpine** image. |
-| `*-unprivileged` | Rootless variant; suffixes every tag above except `latest` (e.g. `alpine-unprivileged`, `1.11.8-build1-alpine-unprivileged`). |
+| `*-unprivileged` | Rootless variant; suffixes every tag above except `latest` (e.g. `alpine-unprivileged`, `1.11.8-build2-alpine-unprivileged`). |
 
 Floating tags move only for stable Angie releases; a prerelease Angie version
 (e.g. `1.11.8-rc1`) publishes its immutable `…-build<N>` tag only.
