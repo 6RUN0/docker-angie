@@ -13,6 +13,12 @@ on:
 permissions:
   contents: read
 
+# Serialize scheduled runs against any manual workflow_dispatch: both push to
+# the same chore/upstream-bump branch via create-pull-request and would race.
+concurrency:
+  group: upstream-check
+  cancel-in-progress: true
+
 jobs:
   check:
     runs-on: ubuntu-latest
@@ -30,10 +36,18 @@ jobs:
           cur_angie=$(sed -n 's/^ARG ANGIE_VERSION=//p' alpine/Dockerfile | head -1)
           cur_ctl=$(sed -n 's/^ARG ANGIE_CTL_COMMIT="\(.*\)"$/\1/p' alpine/Dockerfile | head -1)
 
+          # Alpine repo branch follows the pinned base image (alpine:X.Y -> vX.Y),
+          # mirroring how the Dockerfile derives it from /etc/alpine-release. Kept
+          # in lockstep with ALPINE_BASE_IMAGE so a Dependabot base bump does not
+          # silently leave this query pinned to a stale branch.
+          alpine_tag=$(sed -n 's/^ARG ALPINE_BASE_IMAGE=alpine:\(.*\)$/\1/p' alpine/Dockerfile | head -1)
+          [ -n "$alpine_tag" ] || { echo "could not determine Alpine base image tag" >&2; exit 1; }
+          alpine_branch="v$(printf '%s' "$alpine_tag" | cut -d'.' -f1,2)"
+
           # Latest packaged Angie: the Alpine APKINDEX is authoritative for what
           # the image actually installs. Strip the -rN packaging revision.
           work=$(mktemp -d)
-          curl -fsSL https://download.angie.software/angie/alpine/v3.22/main/x86_64/APKINDEX.tar.gz -o "$work/i.tgz"
+          curl -fsSL "https://download.angie.software/angie/alpine/${alpine_branch}/main/x86_64/APKINDEX.tar.gz" -o "$work/i.tgz"
           tar xzf "$work/i.tgz" -C "$work"
           new_angie=$(awk -v RS='' '/(^|\n)P:angie\n/ { for (i = 1; i <= NF; i++) if ($i ~ /^V:/) print substr($i, 3) }' "$work/APKINDEX" \
             | sed 's/-r[0-9]*$//' | sort -V | tail -1)

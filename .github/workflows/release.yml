@@ -7,6 +7,12 @@ on:
 permissions:
   contents: read
 
+# Serialize per-tag: two tags pushed close together must not race on the
+# floating tags (latest, alpine, 1.11) where the last writer wins.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
 env:
   # Docker Hub repository (namespace/repo) the images are mirrored to, alongside
   # GHCR. Override here if the Docker Hub namespace ever changes.
@@ -18,6 +24,10 @@ jobs:
     permissions:
       contents: read
       packages: write
+    outputs:
+      # Whether this is a stable (non-prerelease) Angie version. Both matrix legs
+      # compute the same value from the tag, so the job output is deterministic.
+      stable: ${{ steps.tags.outputs.stable }}
     strategy:
       fail-fast: false
       matrix:
@@ -87,10 +97,17 @@ jobs:
           tags=""
           append_tags "$ghcr"   # GitHub Container Registry
           append_tags "$hub"    # Docker Hub
+          # Stable iff the Angie version has no prerelease segment (same rule the
+          # floating tags use above). Gates the Docker Hub overview sync.
+          case "$angie" in
+          *-*) stable=no ;;
+          *) stable=yes ;;
+          esac
           {
             printf 'tags=%s\n' "$tags"
             printf 'angie=%s\n' "$angie"
             printf 'image_version=%s-build%s\n' "$angie" "$build"
+            printf 'stable=%s\n' "$stable"
           } >>"$GITHUB_OUTPUT"
 
       - uses: docker/setup-qemu-action@06116385d9baf250c9f4dcb4858b16962ea869c3 # v4.1.0
@@ -208,7 +225,9 @@ jobs:
   dockerhub-description:
     # Mirror docs/dockerhub-overview.md into the Docker Hub repository overview.
     # Runs once per release (not per variant) after the base images are published.
+    # Skipped for prerelease tags so a -rc build never overwrites the overview.
     needs: release
+    if: needs.release.outputs.stable == 'yes'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0 # zizmor: ignore[artipacked] (no git push; persisted token unused)
