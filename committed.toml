@@ -1,0 +1,25 @@
+# committed (commit-message linter) configuration.
+# Aligns the tool with this repo's Conventional Commits convention:
+# lowercase subjects up to 72 chars, imperative mood, no trailing period,
+# and the full contributor type set (the tool defaults omit build/ci/revert).
+style = "conventional"
+subject_length = 72
+subject_capitalized = false
+subject_not_punctuated = true
+imperative_subject = true
+no_fixup = true
+no_wip = true
+line_length = 72
+allowed_types = [
+    "feat",
+    "fix",
+    "docs",
+    "style",
+    "refactor",
+    "perf",
+    "test",
+    "build",
+    "ci",
+    "chore",
+    "revert",
+]
