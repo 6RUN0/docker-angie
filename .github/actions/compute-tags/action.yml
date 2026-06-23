@@ -1,0 +1,138 @@
+name: Compute image tags
+description: >
+  Parse a vX.Y.Z-buildN release tag and compute the immutable plus floating
+  Docker image tag set across GHCR and Docker Hub. Ordering guards ensure a
+  backported older buildN never moves a shared floating tag (patch, minor,
+  channel, latest) backwards. Requires the caller to check out with
+  fetch-depth: 0 so every release tag is present locally.
+
+inputs:
+  ref-name:
+    description: The pushed tag, e.g. v1.11.8-build1 (github.ref_name).
+    required: true
+  repository:
+    description: owner/repo (github.repository); lowercased for GHCR.
+    required: true
+  dockerhub-repo:
+    description: Docker Hub namespace/repo the images are mirrored to.
+    required: true
+  suffix:
+    description: >
+      Tag suffix identifying the build, e.g. "alpine" or "alpine-unprivileged".
+    required: true
+  latest:
+    description: >
+      When "true", also publish the :latest floating tag (stable releases only,
+      gated on the channel ordering guard).
+    default: "false"
+  dockerfile:
+    description: >
+      When non-empty, assert ARG ANGIE_VERSION in this Dockerfile equals the
+      tag's Angie version so a published tag never lies about its contents.
+    default: ""
+
+outputs:
+  tags:
+    description: Comma-separated tag list for docker/build-push-action.
+    value: ${{ steps.compute.outputs.tags }}
+  angie:
+    description: The Angie version without the build suffix (e.g. 1.11.8).
+    value: ${{ steps.compute.outputs.angie }}
+  image-version:
+    description: The angie-buildN identifier (e.g. 1.11.8-build1).
+    value: ${{ steps.compute.outputs.image_version }}
+  ghcr:
+    description: The lowercased GHCR base (ghcr.io/owner/repo), no tag.
+    value: ${{ steps.compute.outputs.ghcr }}
+
+runs:
+  using: composite
+  steps:
+    - id: compute
+      shell: sh
+      env:
+        REF_NAME: ${{ inputs.ref-name }}
+        REPO: ${{ inputs.repository }}
+        DOCKERHUB_REPO: ${{ inputs.dockerhub-repo }}
+        SUFFIX: ${{ inputs.suffix }}
+        LATEST: ${{ inputs.latest }}
+        DOCKERFILE: ${{ inputs.dockerfile }}
+      run: |
+        set -eu
+        # Release tags carry the Angie version plus a packaging build number:
+        # vX.Y.Z-buildN. Split them apart.
+        ref=${REF_NAME#v}                                  # v1.11.8-build1 -> 1.11.8-build1
+        case "$ref" in
+        *-build[0-9]*) ;;
+        *) echo "release tag must be vX.Y.Z-buildN (got '$REF_NAME')" >&2; exit 1 ;;
+        esac
+        build=${ref##*-build}                              # 1
+        angie=${ref%-build*}                               # 1.11.8 (or 1.11.8-rc1)
+        case "$build" in
+        ''|*[!0-9]*) echo "build number must be numeric (got '$build')" >&2; exit 1 ;;
+        esac
+        # Guard: the image's pinned Angie version must equal the tag's version.
+        if [ -n "$DOCKERFILE" ]; then
+          pinned=$(sed -n 's/^ARG ANGIE_VERSION=//p' "$DOCKERFILE" | head -1)
+          if [ "$pinned" != "$angie" ]; then
+            echo "tag Angie version '$angie' != ARG ANGIE_VERSION '$pinned' in $DOCKERFILE" >&2
+            exit 1
+          fi
+        fi
+        ghcr="ghcr.io/$(printf '%s' "$REPO" | tr '[:upper:]' '[:lower:]')"
+        hub="docker.io/${DOCKERHUB_REPO}"
+        # Ordering guards: a backported older buildN must never move a shared
+        # floating tag backwards. Each floating tier moves only when this tag is
+        # the newest in its competition set among all stable release tags
+        # (vX.Y.Z-buildN); prereleases never compete.
+        stable_re='^v[0-9][0-9.]*-build[0-9]+$'
+        angie_re=$(printf '%s' "$angie" | sed 's/[.]/\\./g')
+        minor_re=$(printf '%s' "${angie%.*}" | sed 's/[.]/\\./g')
+        # True when REF_NAME is the highest-versioned tag matching the ERE $1.
+        newest_in() {
+          [ "$(git tag --list --sort=-v:refname | grep -E "$1" | head -n1)" = "$REF_NAME" ]
+        }
+        move_patch=no; move_minor=no; move_channel=no
+        case "$angie" in
+        *-*) ;;   # prerelease Angie: immutable build tag only, no floating tags
+        *)
+          # patch tag (e.g. 1.11.8): newest build of this exact version.
+          if newest_in "^v${angie_re}-build[0-9]+\$"; then move_patch=yes; fi
+          # minor tag (e.g. 1.11): newest in this X.Y line, only for X.Y.Z.
+          case "$angie" in
+          *.*.*)
+            if newest_in "^v${minor_re}\.[0-9]+-build[0-9]+\$"; then move_minor=yes; fi
+            ;;
+          esac
+          # channel/latest: newest stable release overall.
+          if newest_in "$stable_re"; then move_channel=yes; fi
+          ;;
+        esac
+        # Append the tag set for one registry base to $tags. The immutable
+        # version+build tag is always published; each floating tier (patch,
+        # minor, channel, latest) is gated on its ordering guard above.
+        append_tags() {
+          base=$1
+          tags="${tags:+$tags,}$base:${angie}-build${build}-${SUFFIX}"
+          if [ "$move_patch" = yes ]; then
+            tags="$tags,$base:${angie}-${SUFFIX}"
+          fi
+          if [ "$move_minor" = yes ]; then
+            tags="$tags,$base:${angie%.*}-${SUFFIX}"
+          fi
+          if [ "$move_channel" = yes ]; then
+            tags="$tags,$base:${SUFFIX}"
+            if [ "$LATEST" = "true" ]; then
+              tags="$tags,$base:latest"
+            fi
+          fi
+        }
+        tags=""
+        append_tags "$ghcr"   # GitHub Container Registry
+        append_tags "$hub"    # Docker Hub
+        {
+          printf 'tags=%s\n' "$tags"
+          printf 'angie=%s\n' "$angie"
+          printf 'image_version=%s-build%s\n' "$angie" "$build"
+          printf 'ghcr=%s\n' "$ghcr"
+        } >>"$GITHUB_OUTPUT"
