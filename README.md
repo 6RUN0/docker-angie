@@ -113,18 +113,23 @@ foreign `--user`.
 
 ## Versioning
 
-Tags follow the upstream release version with a variant suffix:
+The image tag encodes the **Angie version** plus a packaging **build number** —
+`<angie>-build<N>-<variant>`. The build number increments when the same Angie
+version is repackaged (base image bump, entrypoint fix, angie-ctl update). The
+Angie version inside any image is also exposed in the `software.angie.version`
+label (`docker inspect`) and via `angie -v`.
 
 | Tag | Meaning |
 | --- | --- |
-| `<x.y.z>-alpine`, `<x.y.z>-debian` | Immutable, fully-qualified — **pin this**. |
-| `<x.y>-alpine` | Latest patch of a minor line (stable releases only). |
+| `1.11.8-build1-alpine`, `…-debian` | Immutable — exact Angie version and packaging. **Pin this.** |
+| `1.11.8-alpine` | Latest build of that Angie patch. |
+| `1.11-alpine` | Latest patch of that Angie minor line. |
 | `alpine`, `debian` | Latest stable of that base. |
 | `latest` | Latest stable **Alpine** image. |
-| `*-unprivileged` | Rootless variant; suffixes the base/version tags (e.g. `alpine-unprivileged`, `<x.y.z>-alpine-unprivileged`), but not `latest`. |
+| `*-unprivileged` | Rootless variant; suffixes every tag above except `latest` (e.g. `alpine-unprivileged`, `1.11.8-build1-alpine-unprivileged`). |
 
-Floating tags move only for stable `x.y.z` releases; a prerelease (e.g.
-`1.2.3-rc1`) publishes its immutable tag only.
+Floating tags move only for stable Angie releases; a prerelease Angie version
+(e.g. `1.11.8-rc1`) publishes its immutable `…-build<N>` tag only.
 
 ## Documentation
 

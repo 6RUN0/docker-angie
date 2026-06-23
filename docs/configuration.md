@@ -151,6 +151,19 @@ response).
 These arguments are passed to `docker build` with `--build-arg`. Refer to
 [usage.md](usage.md) for full build examples.
 
+### Angie version and image metadata (both Dockerfiles)
+
+| Argument | Default | Description |
+|---|---|---|
+| `ANGIE_VERSION` | current pin | Upstream Angie version installed (core + all modules), pinned via apk's `=~` operator and apt `madison` resolution so the image is reproducible. The release workflow injects this from the git tag and refuses to publish if it disagrees with the pin. |
+| `IMAGE_VERSION` | `dev` | Packaging version stamped into `org.opencontainers.image.version` (the image tag minus the variant suffix, e.g. `1.11.8-build1`). Set by the release workflow. |
+| `VCS_REF` | empty | Source commit stamped into `org.opencontainers.image.revision`. Set by the release workflow. |
+
+The image carries OCI labels: the `org.opencontainers.image.*` set (`title`,
+`description`, `source`, `url`, `documentation`, `licenses`, `version`,
+`revision`) plus `software.angie.version` (the exact Angie version). Read them
+with `docker inspect --format '{{json .Config.Labels}}' <image>`.
+
 ### Unprivileged image identity (`Dockerfile.unprivileged`)
 
 | Argument | Default | Description |

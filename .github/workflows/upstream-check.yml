@@ -1,0 +1,86 @@
+name: Upstream check
+
+# Dependabot cannot track the Angie package version (pinned in a RUN via
+# ARG ANGIE_VERSION) nor the angie-ctl git pin (ARG ANGIE_CTL_COMMIT). This
+# workflow fills that gap: weekly it compares the pins against upstream and
+# opens a PR bumping them in both Dockerfiles.
+
+on:
+  schedule:
+    - cron: "17 6 * * 1" # Mondays, 06:17 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0 # zizmor: ignore[artipacked] (create-pull-request pushes a branch; token not exposed via artifacts)
+
+      - name: Detect upstream Angie and angie-ctl updates
+        id: detect
+        run: |
+          set -eu
+          # Current pins (alpine and debian are kept in sync; read alpine).
+          cur_angie=$(sed -n 's/^ARG ANGIE_VERSION=//p' alpine/Dockerfile | head -1)
+          cur_ctl=$(sed -n 's/^ARG ANGIE_CTL_COMMIT="\(.*\)"$/\1/p' alpine/Dockerfile | head -1)
+
+          # Latest packaged Angie: the Alpine APKINDEX is authoritative for what
+          # the image actually installs. Strip the -rN packaging revision.
+          work=$(mktemp -d)
+          curl -fsSL https://download.angie.software/angie/alpine/v3.22/main/x86_64/APKINDEX.tar.gz -o "$work/i.tgz"
+          tar xzf "$work/i.tgz" -C "$work"
+          new_angie=$(awk -v RS='' '/(^|\n)P:angie\n/ { for (i = 1; i <= NF; i++) if ($i ~ /^V:/) print substr($i, 3) }' "$work/APKINDEX" \
+            | sed 's/-r[0-9]*$//' | sort -V | tail -1)
+
+          # Latest angie-ctl commit on its default branch.
+          new_ctl=$(git ls-remote https://github.com/6RUN0/angie-ctl.git main | cut -f1)
+
+          [ -n "$new_angie" ] || { echo "could not determine latest Angie version" >&2; exit 1; }
+          [ -n "$new_ctl" ] || { echo "could not determine latest angie-ctl commit" >&2; exit 1; }
+
+          changed=no
+          body=$(mktemp)
+          printf 'Automated upstream bump.\n\n' >> "$body"
+          if [ "$new_angie" != "$cur_angie" ]; then
+            changed=yes
+            printf -- '- Angie: %s -> %s\n' "$cur_angie" "$new_angie" >> "$body"
+            for df in alpine/Dockerfile debian/Dockerfile; do
+              sed -i "s/^ARG ANGIE_VERSION=.*/ARG ANGIE_VERSION=$new_angie/" "$df"
+            done
+          fi
+          if [ "$new_ctl" != "$cur_ctl" ]; then
+            changed=yes
+            printf -- '- angie-ctl: %.7s -> %.7s\n' "$cur_ctl" "$new_ctl" >> "$body"
+            for df in alpine/Dockerfile debian/Dockerfile; do
+              sed -i "s/^ARG ANGIE_CTL_COMMIT=.*/ARG ANGIE_CTL_COMMIT=\"$new_ctl\"/" "$df"
+            done
+          fi
+          if [ "$new_angie" != "$cur_angie" ]; then
+            printf '\nAfter merge, tag a release v%s-build1 to publish it.\n' "$new_angie" >> "$body"
+          fi
+
+          {
+            echo "changed=$changed"
+            echo "body_path=$body"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Open pull request
+        if: steps.detect.outputs.changed == 'yes'
+        # Opened with the default GITHUB_TOKEN: the PR will not itself trigger CI
+        # (a GITHUB_TOKEN-authored event does not start other workflows). Re-run
+        # CI by pushing to the branch or via workflow_dispatch before merging.
+        uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8.1.1
+        with:
+          branch: chore/upstream-bump
+          base: develop
+          title: "chore: bump pinned Angie / angie-ctl to upstream"
+          body-path: ${{ steps.detect.outputs.body_path }}
+          commit-message: "chore: bump pinned Angie/angie-ctl to upstream"
+          delete-branch: true
+          labels: dependencies

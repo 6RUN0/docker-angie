@@ -24,6 +24,14 @@ ARG DEBIAN_SECURITY_MIRROR="http://deb.debian.org/debian-security"
 ARG ANGIE_SIGNING_KEY_URL="https://angie.software/keys/angie-signing.gpg"
 ARG ANGIE_SIGNING_KEY="/usr/share/keyrings/angie-signing.gpg"
 ARG ANGIE_SOURCE_LIST="/etc/apt/sources.list.d/angie.sources"
+# Angie version pinned into the image. Bump via the upstream-check workflow PR;
+# release tags (vX.Y.Z-buildN) must match this value (enforced in release.yml).
+ARG ANGIE_VERSION=1.11.8
+# Packaging version (the image tag minus the variant suffix) and source revision,
+# stamped into the OCI labels below. Overridden by release.yml; a dev marker for
+# local/CI builds.
+ARG IMAGE_VERSION=dev
+ARG VCS_REF=""
 # Helper script for angie control
 ARG ANGIE_CTL_REPO="https://github.com/6RUN0/angie-ctl.git"
 ARG ANGIE_CTL_COMMIT="a69c1d102ec99a893a11f08015ea150c1e287482"
@@ -35,12 +43,17 @@ ARG ANGIE_CTL="/usr/local/bin/angie-ctl"
 # + https://github.com/leev/ngx_http_geoip2_module
 # + https://github.com/owasp-modsecurity/ModSecurity-nginx
 # + https://github.com/yaoweibin/ngx_http_substitutions_filter_module
-# DL3008: angie + modules are deliberately unpinned (the image tracks upstream
-# security updates, and core/modules must stay on the same current version).
+# DL3008: ca-certificates/curl/git/tini/wget are intentionally unpinned (they
+# track the base distro); angie and its modules ARE pinned to ${ANGIE_VERSION}:
+# the exact Debian version (e.g. 1.11.8-1~trixie) is resolved at build time from
+# apt-cache madison, locking the upstream version while tolerating the distro
+# revision/suite suffix.
 # DL3003: the `cd` into the mktemp angie-ctl clone is scoped to this layer;
 # WORKDIR would leak into later instructions. SC1091: `. /etc/os-release` reads
-# a build-time file hadolint cannot follow.
-# hadolint ignore=DL3008,DL3003,SC1091
+# a build-time file hadolint cannot follow. DL4006: the madison pipe needs no
+# pipefail — Debian's /bin/sh is dash (no `set -o pipefail`), and a failing pipe
+# yields an empty version that the explicit `[ -n ... ] || exit 1` guard catches.
+# hadolint ignore=DL3008,DL3003,SC1091,DL4006
 RUN \
   set -eux; \
   # Configure apt to use a local mirror
@@ -82,12 +95,17 @@ RUN \
   echo "Signed-By: ${ANGIE_SIGNING_KEY}"; \
   } > "${ANGIE_SOURCE_LIST}"; \
   apt-get update; \
+  # Resolve the exact Debian package version for the pinned upstream ANGIE_VERSION
+  # (the distro revision/suite suffix is not known ahead of time), then install
+  # core and modules locked to that one version.
+  angie_pkg_version="$(apt-cache madison angie | awk -v v="${ANGIE_VERSION}" '$3 ~ "^"v"-" {print $3; exit}')"; \
+  [ -n "${angie_pkg_version}" ] || { echo "no angie package matching ${ANGIE_VERSION} in the repository" >&2; exit 1; }; \
   apt-get install -y --no-install-recommends --no-install-suggests \
-  angie \
-  angie-module-brotli \
-  angie-module-geoip2 \
-  angie-module-modsecurity \
-  angie-module-subs \
+  angie="${angie_pkg_version}" \
+  angie-module-brotli="${angie_pkg_version}" \
+  angie-module-geoip2="${angie_pkg_version}" \
+  angie-module-modsecurity="${angie_pkg_version}" \
+  angie-module-subs="${angie_pkg_version}" \
   tini \
   wget \
   ; \
@@ -116,6 +134,16 @@ COPY rootfs/ /
 # Validate the baked-in configuration at build time: a broken default config
 # fails the build instead of the first container start.
 RUN angie -t
+
+LABEL org.opencontainers.image.title="Angie Docker image" \
+      org.opencontainers.image.description="Angie (an nginx fork) with Brotli, GeoIP2, ModSecurity (WAF), and substitutions modules" \
+      org.opencontainers.image.source="https://github.com/6RUN0/docker-angie" \
+      org.opencontainers.image.url="https://github.com/6RUN0/docker-angie" \
+      org.opencontainers.image.documentation="https://github.com/6RUN0/docker-angie/blob/main/README.md" \
+      org.opencontainers.image.licenses="MIT" \
+      org.opencontainers.image.version="${IMAGE_VERSION}" \
+      org.opencontainers.image.revision="${VCS_REF}" \
+      software.angie.version="${ANGIE_VERSION}"
 
 VOLUME /etc/angie/custom
 

@@ -38,25 +38,44 @@ jobs:
           REPO: ${{ github.repository }}
           VARIANT: ${{ matrix.variant }}
           LATEST: ${{ matrix.latest }}
+          DOCKERFILE: ${{ matrix.dockerfile }}
         run: |
           set -eu
-          ver=${REF_NAME#v}                                  # v1.2.3 -> 1.2.3
+          # Release tags carry the Angie version plus a packaging build number:
+          # vX.Y.Z-buildN. Split them apart.
+          ref=${REF_NAME#v}                                  # v1.11.8-build1 -> 1.11.8-build1
+          case "$ref" in
+          *-build[0-9]*) ;;
+          *) echo "release tag must be vX.Y.Z-buildN (got '$REF_NAME')" >&2; exit 1 ;;
+          esac
+          build=${ref##*-build}                              # 1
+          angie=${ref%-build*}                               # 1.11.8 (or 1.11.8-rc1)
+          case "$build" in
+          ''|*[!0-9]*) echo "build number must be numeric (got '$build')" >&2; exit 1 ;;
+          esac
+          # Guard: the image's pinned Angie version must equal the tag's version,
+          # so a published tag never lies about what is inside.
+          pinned=$(sed -n 's/^ARG ANGIE_VERSION=//p' "$DOCKERFILE" | head -1)
+          if [ "$pinned" != "$angie" ]; then
+            echo "tag Angie version '$angie' != ARG ANGIE_VERSION '$pinned' in $DOCKERFILE" >&2
+            exit 1
+          fi
           ghcr="ghcr.io/$(printf '%s' "$REPO" | tr '[:upper:]' '[:lower:]')"
           hub="docker.io/${DOCKERHUB_REPO}"
-          # Append the full tag set for one registry base to $tags. The immutable,
-          # fully-qualified tag is always published; floating tags (major.minor,
-          # channel, latest) only for stable releases: a SemVer prerelease
-          # (contains '-', e.g. 1.2.3-rc1) must not move them.
+          # Append the full tag set for one registry base to $tags. The immutable
+          # version+build tag is always published; floating tags (patch, minor,
+          # channel, latest) only for stable releases: a prerelease Angie version
+          # (the version part keeps a '-', e.g. 1.11.8-rc1) must not move them.
           append_tags() {
             base=$1
-            tags="${tags:+$tags,}$base:${ver}-${VARIANT}"
-            case "$ver" in
+            tags="${tags:+$tags,}$base:${angie}-build${build}-${VARIANT}"
+            case "$angie" in
             *-*) ;;
             *)
-              # major.minor floating tag only for a 3-component X.Y.Z release; a
-              # 2-component tag (e.g. v1.2) would otherwise yield a bare major tag.
-              case "$ver" in
-              *.*.*) tags="$tags,$base:${ver%.*}-${VARIANT}" ;;
+              tags="$tags,$base:${angie}-${VARIANT}"
+              # minor floating tag only for a 3-component X.Y.Z version.
+              case "$angie" in
+              *.*.*) tags="$tags,$base:${angie%.*}-${VARIANT}" ;;
               esac
               tags="$tags,$base:${VARIANT}"
               if [ "$LATEST" = "true" ]; then
@@ -68,7 +87,11 @@ jobs:
           tags=""
           append_tags "$ghcr"   # GitHub Container Registry
           append_tags "$hub"    # Docker Hub
-          printf 'tags=%s\n' "$tags" >>"$GITHUB_OUTPUT"
+          {
+            printf 'tags=%s\n' "$tags"
+            printf 'angie=%s\n' "$angie"
+            printf 'image_version=%s-build%s\n' "$angie" "$build"
+          } >>"$GITHUB_OUTPUT"
 
       - uses: docker/setup-qemu-action@06116385d9baf250c9f4dcb4858b16962ea869c3 # v4.1.0
       - uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # v4.1.0
@@ -91,6 +114,10 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ steps.tags.outputs.tags }}
+          build-args: |
+            ANGIE_VERSION=${{ steps.tags.outputs.angie }}
+            IMAGE_VERSION=${{ steps.tags.outputs.image_version }}
+            VCS_REF=${{ github.sha }}
           cache-from: type=gha,scope=${{ matrix.variant }}
           cache-to: type=gha,mode=max,scope=${{ matrix.variant }}
 
@@ -119,22 +146,28 @@ jobs:
           VARIANT: ${{ matrix.variant }}
         run: |
           set -eu
-          ver=${REF_NAME#v}
+          ref=${REF_NAME#v}
+          case "$ref" in
+          *-build[0-9]*) ;;
+          *) echo "release tag must be vX.Y.Z-buildN (got '$REF_NAME')" >&2; exit 1 ;;
+          esac
+          build=${ref##*-build}
+          angie=${ref%-build*}
           ghcr="ghcr.io/$(printf '%s' "$REPO" | tr '[:upper:]' '[:lower:]')"
           hub="docker.io/${DOCKERHUB_REPO}"
           sfx="${VARIANT}-unprivileged"
-          # Append the full tag set for one registry base to $tags. The immutable,
-          # fully-qualified tag is always published; floating tags only for stable
-          # releases (see the base release job).
+          # Append the full tag set for one registry base to $tags (see the base
+          # release job). The rootless variant has no `latest`.
           append_tags() {
             base=$1
-            tags="${tags:+$tags,}$base:${ver}-${sfx}"
-            case "$ver" in
+            tags="${tags:+$tags,}$base:${angie}-build${build}-${sfx}"
+            case "$angie" in
             *-*) ;;
             *)
-              # major.minor floating tag only for a 3-component X.Y.Z release.
-              case "$ver" in
-              *.*.*) tags="$tags,$base:${ver%.*}-${sfx}" ;;
+              tags="$tags,$base:${angie}-${sfx}"
+              # minor floating tag only for a 3-component X.Y.Z version.
+              case "$angie" in
+              *.*.*) tags="$tags,$base:${angie%.*}-${sfx}" ;;
               esac
               tags="$tags,$base:${sfx}"
               ;;
@@ -144,8 +177,8 @@ jobs:
           append_tags "$ghcr"   # GitHub Container Registry
           append_tags "$hub"    # Docker Hub
           printf 'tags=%s\n' "$tags" >>"$GITHUB_OUTPUT"
-          # The rootless image is built FROM the just-pushed base tag (GHCR).
-          printf 'base=%s:%s-%s\n' "$ghcr" "$ver" "$VARIANT" >>"$GITHUB_OUTPUT"
+          # The rootless image is built FROM the just-pushed immutable base tag.
+          printf 'base=%s:%s-build%s-%s\n' "$ghcr" "$angie" "$build" "$VARIANT" >>"$GITHUB_OUTPUT"
 
       - uses: docker/setup-qemu-action@06116385d9baf250c9f4dcb4858b16962ea869c3 # v4.1.0
       - uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # v4.1.0
