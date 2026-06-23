@@ -1,3 +1,8 @@
 *
 !rootfs/
 !rootfs-unprivileged/
+
+# Keep agent/runtime state out of the build context even though rootfs/ is
+# whitelisted above (a stray .omc/ under rootfs/ would otherwise ship). Later
+# patterns win, so this re-excludes it.
+**/.omc/
