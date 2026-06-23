@@ -47,8 +47,8 @@ uid/gid `65532`.
 | --- | --- | --- |
 | `ANGIE_BROTLI_ENABLED` | `no` | Brotli compression. |
 | `ANGIE_GZIP_ENABLED` | `no` | gzip compression. |
-| `ANGIE_MODSECURITY_ENABLE` | `no` | ModSecurity WAF (engine only; bring your own rules). |
-| `ANGIE_SUBS_ENABLE` | `no` | Response-body substitutions filter. |
+| `ANGIE_MODSECURITY_ENABLED` | `no` | ModSecurity WAF (engine only; bring your own rules). |
+| `ANGIE_SUBS_ENABLED` | `no` | Response-body substitutions filter. |
 | `GEOIP2_DB_COUNTRY` | unset | Path to a GeoIP2 country DB; enables GeoIP2 when readable. |
 
 Full reference:
@@ -98,8 +98,8 @@ uid/gid `65532`.
 | --- | --- | --- |
 | `ANGIE_BROTLI_ENABLED` | `no` | Сжатие Brotli. |
 | `ANGIE_GZIP_ENABLED` | `no` | Сжатие gzip. |
-| `ANGIE_MODSECURITY_ENABLE` | `no` | WAF ModSecurity (только движок; правила свои). |
-| `ANGIE_SUBS_ENABLE` | `no` | Фильтр подстановок в теле ответа. |
+| `ANGIE_MODSECURITY_ENABLED` | `no` | WAF ModSecurity (только движок; правила свои). |
+| `ANGIE_SUBS_ENABLED` | `no` | Фильтр подстановок в теле ответа. |
 | `GEOIP2_DB_COUNTRY` | unset | Путь к базе GeoIP2 стран; включает GeoIP2, если файл доступен. |
 
 Полный справочник:

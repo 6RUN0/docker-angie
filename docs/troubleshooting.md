@@ -209,7 +209,7 @@ docker exec <container> angie -T 2>/dev/null | grep geoip2
 
 ## 6. ModSecurity is enabled but nothing is blocked
 
-**Symptom.** `ANGIE_MODSECURITY_ENABLE=1` is set, Angie starts, but malicious
+**Symptom.** `ANGIE_MODSECURITY_ENABLED=1` is set, Angie starts, but malicious
 requests pass through without being blocked.
 
 **Cause.** The image loads the ModSecurity dynamic module (`libmodsecurity`)
@@ -221,14 +221,14 @@ blocks nothing.
 
 ```sh
 docker run \
-  -e ANGIE_MODSECURITY_ENABLE=1 \
+  -e ANGIE_MODSECURITY_ENABLED=1 \
   -v /host/path/to/crs:/etc/angie/modsec/crs:ro \
   6run0/angie:alpine
 ```
 
 Your ModSecurity configuration should `Include` the rule files. See
 [limitations.md](limitations.md) for the full list of WAF constraints and
-[configuration.md](configuration.md) for the `ANGIE_MODSECURITY_ENABLE` toggle.
+[configuration.md](configuration.md) for the `ANGIE_MODSECURITY_ENABLED` toggle.
 
 ---
 

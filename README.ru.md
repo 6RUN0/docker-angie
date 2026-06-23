@@ -87,10 +87,10 @@ docker run -d -p 8080:8080 6run0/angie:alpine-unprivileged
 | --- | --- | --- |
 | `ANGIE_BROTLI_ENABLED` | `no` | Загрузить модуль Brotli и включить сжатие Brotli. |
 | `ANGIE_GZIP_ENABLED` | `no` | Включить сжатие gzip. |
-| `ANGIE_MODSECURITY_ENABLE` | `no` | Включить модуль WAF ModSecurity. |
-| `ANGIE_SUBS_ENABLE` | `no` | Включить фильтр подстановок в теле ответа. |
+| `ANGIE_MODSECURITY_ENABLED` | `no` | Включить модуль WAF ModSecurity. |
+| `ANGIE_SUBS_ENABLED` | `no` | Включить фильтр подстановок в теле ответа. |
 | `GEOIP2_DB_COUNTRY` | unset | Путь к базе GeoIP2 стран; включает GeoIP2, если файл доступен. |
-| `ANGIE_MAP_WEBSOCKET_ENABLE` | `no` | Включить карту переменных для апгрейда WebSocket. |
+| `ANGIE_MAP_WEBSOCKET_ENABLED` | `no` | Включить карту переменных для апгрейда WebSocket. |
 | `ANGIE_ENTRYPOINT_WORKER_PROCESSES_AUTOTUNE` | unset | Настроить `worker_processes` под число CPU при старте. |
 
 Монтируйте кастомную конфигурацию в том **`/etc/angie/custom`**.

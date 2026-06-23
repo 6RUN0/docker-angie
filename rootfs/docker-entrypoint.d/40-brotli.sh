@@ -5,7 +5,7 @@
 skip_toggle_unless_writable
 
 : "${ANGIE_BROTLI_ENABLED:=no}"
-: "${ANGIE_BROTLI_STATIC_ENABLE:=no}"
+: "${ANGIE_BROTLI_STATIC_ENABLED:=no}"
 
 enable_brotli() {
   angie-ctl mod en "http_brotli_filter.conf" &&
@@ -22,7 +22,7 @@ enable_brotli_static() {
     ngx_info "Brotli static compression enabled"
 }
 
-case "${ANGIE_BROTLI_STATIC_ENABLE}" in
+case "${ANGIE_BROTLI_STATIC_ENABLED}" in
 yes | on | 1 | true | enable | enabled)
   enable_brotli_static
   exit 0

@@ -33,16 +33,16 @@ runtime toggling works out of the box.
 | Variable | Default | Description |
 |---|---|---|
 | `ANGIE_BROTLI_ENABLED` | `no` | Load the Brotli filter module and enable Brotli on-the-fly compression. |
-| `ANGIE_BROTLI_STATIC_ENABLE` | `no` | Enable Brotli compression and serving of pre-compressed `*.br` files. Implies `ANGIE_BROTLI_ENABLED`. |
+| `ANGIE_BROTLI_STATIC_ENABLED` | `no` | Enable Brotli compression and serving of pre-compressed `*.br` files. Implies `ANGIE_BROTLI_ENABLED`. |
 | `ANGIE_GZIP_ENABLED` | `no` | Enable gzip on-the-fly compression. |
-| `ANGIE_GZIP_STATIC_ENABLE` | `no` | Enable gzip compression and serving of pre-compressed `*.gz` files. Implies `ANGIE_GZIP_ENABLED`. |
+| `ANGIE_GZIP_STATIC_ENABLED` | `no` | Enable gzip compression and serving of pre-compressed `*.gz` files. Implies `ANGIE_GZIP_ENABLED`. |
 
 ### Dynamic modules
 
 | Variable | Default | Description |
 |---|---|---|
-| `ANGIE_MODSECURITY_ENABLE` | `no` | Load the ModSecurity module (WAF engine only; no rules ship by default -- mount a ruleset via the custom volume). |
-| `ANGIE_SUBS_ENABLE` | `no` | Load the HTTP substitutions filter module. |
+| `ANGIE_MODSECURITY_ENABLED` | `no` | Load the ModSecurity module (WAF engine only; no rules ship by default -- mount a ruleset via the custom volume). |
+| `ANGIE_SUBS_ENABLED` | `no` | Load the HTTP substitutions filter module. |
 
 ### GeoIP2
 
@@ -75,7 +75,7 @@ more than one causes each request to be logged multiple times.
 
 | Variable | Default | Description |
 |---|---|---|
-| `ANGIE_MAP_WEBSOCKET_ENABLE` | `no` | Enable the WebSocket variable map, which sets the `Connection` upgrade header for upstream WebSocket proxying. |
+| `ANGIE_MAP_WEBSOCKET_ENABLED` | `no` | Enable the WebSocket variable map, which sets the `Connection` upgrade header for upstream WebSocket proxying. |
 
 ### Filesystem
 
@@ -87,10 +87,10 @@ more than one causes each request to be logged multiple times.
 
 ## Variable dependencies
 
-- `ANGIE_BROTLI_STATIC_ENABLE` activates the base Brotli toggle
+- `ANGIE_BROTLI_STATIC_ENABLED` activates the base Brotli toggle
   (`ANGIE_BROTLI_ENABLED`) before enabling the static module. Setting only the
   static variable is sufficient.
-- `ANGIE_GZIP_STATIC_ENABLE` activates the base gzip toggle
+- `ANGIE_GZIP_STATIC_ENABLED` activates the base gzip toggle
   (`ANGIE_GZIP_ENABLED`) before enabling static. Setting only the static
   variable is sufficient.
 - `ANGIE_LOG_FORMAT_*` variables only register a format definition. They do not

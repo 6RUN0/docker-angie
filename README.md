@@ -86,10 +86,10 @@ Key toggles (full table of 20+ variables in
 | --- | --- | --- |
 | `ANGIE_BROTLI_ENABLED` | `no` | Load the Brotli module and enable Brotli compression. |
 | `ANGIE_GZIP_ENABLED` | `no` | Enable gzip compression. |
-| `ANGIE_MODSECURITY_ENABLE` | `no` | Enable the ModSecurity WAF module. |
-| `ANGIE_SUBS_ENABLE` | `no` | Enable the response-body substitutions filter. |
+| `ANGIE_MODSECURITY_ENABLED` | `no` | Enable the ModSecurity WAF module. |
+| `ANGIE_SUBS_ENABLED` | `no` | Enable the response-body substitutions filter. |
 | `GEOIP2_DB_COUNTRY` | unset | Path to a GeoIP2 country DB; enables GeoIP2 when readable. |
-| `ANGIE_MAP_WEBSOCKET_ENABLE` | `no` | Enable the WebSocket upgrade variable map. |
+| `ANGIE_MAP_WEBSOCKET_ENABLED` | `no` | Enable the WebSocket upgrade variable map. |
 | `ANGIE_ENTRYPOINT_WORKER_PROCESSES_AUTOTUNE` | unset | Tune `worker_processes` to the CPU count at start. |
 
 Mount custom configuration at the **`/etc/angie/custom`** volume.

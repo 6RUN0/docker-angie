@@ -141,15 +141,15 @@ else
 fi
 
 # --- 4c. Static precompression variants -------------------------------------
-cid=$(start -e ANGIE_GZIP_STATIC_ENABLE=1)
+cid=$(start -e ANGIE_GZIP_STATIC_ENABLED=1)
 wait_healthy "$cid" || fail "gzip_static container healthy"
-assert_contains "$(dump_conf "$cid")" "gzip_static on" "ANGIE_GZIP_STATIC_ENABLE enables gzip_static"
+assert_contains "$(dump_conf "$cid")" "gzip_static on" "ANGIE_GZIP_STATIC_ENABLED enables gzip_static"
 docker rm -f "$cid" >/dev/null
 
-cid=$(start -e ANGIE_BROTLI_STATIC_ENABLE=1)
+cid=$(start -e ANGIE_BROTLI_STATIC_ENABLED=1)
 wait_healthy "$cid" || fail "brotli_static container healthy"
 conf=$(dump_conf "$cid")
-assert_contains "$conf" "brotli_static on" "ANGIE_BROTLI_STATIC_ENABLE enables brotli_static"
+assert_contains "$conf" "brotli_static on" "ANGIE_BROTLI_STATIC_ENABLED enables brotli_static"
 assert_contains "$conf" "brotli on" "brotli_static also pulls in base brotli"
 docker rm -f "$cid" >/dev/null
 
@@ -157,7 +157,7 @@ docker rm -f "$cid" >/dev/null
 # ModSecurity and subs are bare load_module; the websocket map is an http snippet.
 # They compose without conflict, so one container exercises all three with
 # independent assertions.
-cid=$(start -e ANGIE_MODSECURITY_ENABLE=1 -e ANGIE_SUBS_ENABLE=1 -e ANGIE_MAP_WEBSOCKET_ENABLE=1)
+cid=$(start -e ANGIE_MODSECURITY_ENABLED=1 -e ANGIE_SUBS_ENABLED=1 -e ANGIE_MAP_WEBSOCKET_ENABLED=1)
 if wait_healthy "$cid"; then
   pass "WAF + subs + websocket: container starts with all three enabled"
 else
@@ -165,9 +165,9 @@ else
   docker logs "$cid" 2>&1 | grep -iE 'emerg|\[error\]' | head -3 || true
 fi
 mods=$(docker exec "$cid" ls /etc/angie/modules.d/ 2>/dev/null || true)
-assert_contains "$mods" "http_modsecurity.conf" "ANGIE_MODSECURITY_ENABLE loads the WAF module"
-assert_contains "$mods" "http_subs_filter.conf" "ANGIE_SUBS_ENABLE loads the subs module"
-assert_contains "$(dump_conf "$cid")" "connection_upgrade" "ANGIE_MAP_WEBSOCKET_ENABLE adds the websocket map"
+assert_contains "$mods" "http_modsecurity.conf" "ANGIE_MODSECURITY_ENABLED loads the WAF module"
+assert_contains "$mods" "http_subs_filter.conf" "ANGIE_SUBS_ENABLED loads the subs module"
+assert_contains "$(dump_conf "$cid")" "connection_upgrade" "ANGIE_MAP_WEBSOCKET_ENABLED adds the websocket map"
 docker rm -f "$cid" >/dev/null
 
 # --- 4e. Access-log format switch keeps exactly one access_log --------------

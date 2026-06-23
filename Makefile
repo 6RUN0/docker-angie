@@ -60,7 +60,7 @@ lint-config: ## gixy security-lint of the standalone vhost config fragments
 .PHONY: lint-config-full
 lint-config-full: ## gixy security-lint of the full effective config (needs $(IMAGE_ALPINE) built)
 	@cid=$$(docker run -d \
-		-e ANGIE_GZIP_ENABLED=1 -e ANGIE_BROTLI_ENABLED=1 -e ANGIE_MAP_WEBSOCKET_ENABLE=1 \
+		-e ANGIE_GZIP_ENABLED=1 -e ANGIE_BROTLI_ENABLED=1 -e ANGIE_MAP_WEBSOCKET_ENABLED=1 \
 		$(IMAGE_ALPINE)); \
 	tmp=$$(mktemp); ok=; \
 	for _ in $$(seq 1 40); do \

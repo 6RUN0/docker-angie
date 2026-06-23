@@ -218,7 +218,7 @@ docker exec <container> angie -T 2>/dev/null | grep geoip2
 
 ## 6. ModSecurity включён, но ничего не блокирует
 
-**Симптом.** Установлена переменная `ANGIE_MODSECURITY_ENABLE=1`, Angie
+**Симптом.** Установлена переменная `ANGIE_MODSECURITY_ENABLED=1`, Angie
 запускается, но вредоносные запросы проходят без блокировки.
 
 **Причина.** Образ загружает динамический модуль ModSecurity
@@ -231,7 +231,7 @@ docker exec <container> angie -T 2>/dev/null | grep geoip2
 
 ```sh
 docker run \
-  -e ANGIE_MODSECURITY_ENABLE=1 \
+  -e ANGIE_MODSECURITY_ENABLED=1 \
   -v /host/path/to/crs:/etc/angie/modsec/crs:ro \
   6run0/angie:alpine
 ```
@@ -239,7 +239,7 @@ docker run \
 В конфигурации ModSecurity файлы правил подключаются через `Include`. См.
 [limitations.md](limitations.md) для полного списка ограничений WAF и
 [configuration.md](configuration.md) для описания тумблера
-`ANGIE_MODSECURITY_ENABLE`.
+`ANGIE_MODSECURITY_ENABLED`.
 
 ---
 

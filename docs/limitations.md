@@ -5,7 +5,7 @@ Known boundaries and constraints of the Angie Docker image.
 ## 1. ModSecurity: WAF engine only, no default ruleset
 
 The image loads the ModSecurity shared library, but **no rule set is bundled**.
-Enabling the WAF module (`ANGIE_MODSECURITY_ENABLE=yes`) activates only the engine
+Enabling the WAF module (`ANGIE_MODSECURITY_ENABLED=yes`) activates only the engine
 itself; without rules, it performs no filtering. You must supply a ruleset --
 such as [OWASP Core Rule Set](https://coreruleset.org/) -- and point ModSecurity
 at it via a custom configuration file mounted under `/etc/angie/custom`.

@@ -34,16 +34,16 @@
 | Переменная | По умолчанию | Описание |
 |---|---|---|
 | `ANGIE_BROTLI_ENABLED` | `no` | Загрузить модуль Brotli filter и включить сжатие Brotli на лету. |
-| `ANGIE_BROTLI_STATIC_ENABLE` | `no` | Включить сжатие Brotli и отдачу предварительно сжатых файлов `*.br`. Подразумевает `ANGIE_BROTLI_ENABLED`. |
+| `ANGIE_BROTLI_STATIC_ENABLED` | `no` | Включить сжатие Brotli и отдачу предварительно сжатых файлов `*.br`. Подразумевает `ANGIE_BROTLI_ENABLED`. |
 | `ANGIE_GZIP_ENABLED` | `no` | Включить сжатие gzip на лету. |
-| `ANGIE_GZIP_STATIC_ENABLE` | `no` | Включить сжатие gzip и отдачу предварительно сжатых файлов `*.gz`. Подразумевает `ANGIE_GZIP_ENABLED`. |
+| `ANGIE_GZIP_STATIC_ENABLED` | `no` | Включить сжатие gzip и отдачу предварительно сжатых файлов `*.gz`. Подразумевает `ANGIE_GZIP_ENABLED`. |
 
 ### Динамические модули
 
 | Переменная | По умолчанию | Описание |
 |---|---|---|
-| `ANGIE_MODSECURITY_ENABLE` | `no` | Загрузить модуль ModSecurity (только движок WAF; правила в образ не включены -- смонтируйте набор правил через пользовательский том). |
-| `ANGIE_SUBS_ENABLE` | `no` | Загрузить модуль HTTP substitutions filter. |
+| `ANGIE_MODSECURITY_ENABLED` | `no` | Загрузить модуль ModSecurity (только движок WAF; правила в образ не включены -- смонтируйте набор правил через пользовательский том). |
+| `ANGIE_SUBS_ENABLED` | `no` | Загрузить модуль HTTP substitutions filter. |
 
 ### GeoIP2
 
@@ -76,7 +76,7 @@
 
 | Переменная | По умолчанию | Описание |
 |---|---|---|
-| `ANGIE_MAP_WEBSOCKET_ENABLE` | `no` | Включить карту переменных WebSocket, которая устанавливает заголовок `Connection: upgrade` для проксирования WebSocket через upstream. |
+| `ANGIE_MAP_WEBSOCKET_ENABLED` | `no` | Включить карту переменных WebSocket, которая устанавливает заголовок `Connection: upgrade` для проксирования WebSocket через upstream. |
 
 ### Файловая система
 
@@ -88,10 +88,10 @@
 
 ## Зависимости между переменными
 
-- `ANGIE_BROTLI_STATIC_ENABLE` активирует базовый тумблер Brotli
+- `ANGIE_BROTLI_STATIC_ENABLED` активирует базовый тумблер Brotli
   (`ANGIE_BROTLI_ENABLED`) перед включением статического модуля. Достаточно
   задать только переменную static.
-- `ANGIE_GZIP_STATIC_ENABLE` активирует базовый тумблер gzip
+- `ANGIE_GZIP_STATIC_ENABLED` активирует базовый тумблер gzip
   (`ANGIE_GZIP_ENABLED`) перед включением static. Достаточно задать только
   переменную static.
 - Переменные `ANGIE_LOG_FORMAT_*` только регистрируют определение формата. Они

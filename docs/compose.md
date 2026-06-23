@@ -75,7 +75,7 @@ services:
     environment:
       ANGIE_BROTLI_ENABLED: "yes"
       ANGIE_GZIP_ENABLED: "yes"
-      ANGIE_MAP_WEBSOCKET_ENABLE: "yes"
+      ANGIE_MAP_WEBSOCKET_ENABLED: "yes"
     healthcheck:
       test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost/healthz"]
       interval: 30s

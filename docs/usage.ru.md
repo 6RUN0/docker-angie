@@ -47,7 +47,7 @@ docker run -d \
   -p 80:80 \
   -e ANGIE_BROTLI_ENABLED=1 \
   -e ANGIE_GZIP_ENABLED=1 \
-  -e ANGIE_MODSECURITY_ENABLE=1 \
+  -e ANGIE_MODSECURITY_ENABLED=1 \
   -v /путь/к/моей/конфигурации:/etc/angie/custom:ro \
   6run0/angie:alpine
 ```

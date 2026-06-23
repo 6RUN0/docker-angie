@@ -5,7 +5,7 @@
 skip_toggle_unless_writable
 
 : "${ANGIE_GZIP_ENABLED:=no}"
-: "${ANGIE_GZIP_STATIC_ENABLE:=no}"
+: "${ANGIE_GZIP_STATIC_ENABLED:=no}"
 
 enable_gzip() {
   angie-ctl httpconf en "020-gzip.conf" &&
@@ -18,7 +18,7 @@ enable_gzip_static() {
     ngx_info "gzip static compression enabled"
 }
 
-case "${ANGIE_GZIP_STATIC_ENABLE}" in
+case "${ANGIE_GZIP_STATIC_ENABLED}" in
 yes | on | 1 | true | enable | enabled)
   enable_gzip_static
   exit 0

@@ -4,9 +4,9 @@
 
 skip_toggle_unless_writable
 
-: "${ANGIE_MODSECURITY_ENABLE:=no}"
+: "${ANGIE_MODSECURITY_ENABLED:=no}"
 
-case "${ANGIE_MODSECURITY_ENABLE}" in
+case "${ANGIE_MODSECURITY_ENABLED}" in
 yes | on | 1 | true | enable | enabled)
   angie-ctl mod en "http_modsecurity.conf" &&
     ngx_info "ModSecurity module is enabled"
