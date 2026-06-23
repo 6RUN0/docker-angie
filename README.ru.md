@@ -140,6 +140,7 @@ Angie (например, `1.11.8-rc1`) публикует лишь свой не
 - [Безопасность](docs/security.ru.md) — non-root, capabilities, секреты
 - [Ограничения](docs/limitations.ru.md) — известные границы
 - [Устранение неполадок](docs/troubleshooting.ru.md) — типичные ошибки
+- [История изменений](CHANGELOG.ru.md) — история релизов
 
 English: [README.md](README.md).
 

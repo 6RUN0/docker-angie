@@ -139,6 +139,7 @@ Floating tags move only for stable Angie releases; a prerelease Angie version
 - [Security](docs/security.md) — non-root, capabilities, secrets
 - [Limitations](docs/limitations.md) — known boundaries
 - [Troubleshooting](docs/troubleshooting.md) — common errors
+- [Changelog](CHANGELOG.md) — release history
 
 Russian: [README.ru.md](README.ru.md).
 
