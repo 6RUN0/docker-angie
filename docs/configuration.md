@@ -36,6 +36,18 @@ runtime toggling works out of the box.
 | `ANGIE_BROTLI_STATIC_ENABLED` | `no` | Enable Brotli compression and serving of pre-compressed `*.br` files. Implies `ANGIE_BROTLI_ENABLED`. |
 | `ANGIE_GZIP_ENABLED` | `no` | Enable gzip on-the-fly compression. |
 | `ANGIE_GZIP_STATIC_ENABLED` | `no` | Enable gzip compression and serving of pre-compressed `*.gz` files. Implies `ANGIE_GZIP_ENABLED`. |
+| `ANGIE_ZSTD_ENABLED` | `no` | Load the Zstandard filter module and enable zstd on-the-fly compression (`zstd_comp_level 1`; raise per-vhost via the custom volume). |
+| `ANGIE_ZSTD_STATIC_ENABLED` | `no` | Enable zstd compression and serving of pre-compressed `*.zst` files. Implies `ANGIE_ZSTD_ENABLED`. |
+
+> **Note on caching:** only gzip sets `Vary: Accept-Encoding` (via `gzip_vary
+> on`); brotli and zstd do **not** emit it on their own. While gzip is enabled
+> it adds `Vary` to every response, including those another codec compressed. If
+> you enable brotli or zstd **without** gzip behind a shared or CDN cache, the
+> cache can hand a compressed body to a client that never requested that
+> encoding -- keep gzip enabled, or add `Vary: Accept-Encoding` per-vhost.
+> `ANGIE_ZSTD_STATIC_ENABLED` serves a sibling `*.zst` when one exists and the
+> client accepts zstd, and silently falls back to on-the-fly compression
+> otherwise -- a missing `*.zst` is not an error.
 
 ### Dynamic modules
 
@@ -77,6 +89,42 @@ more than one causes each request to be logged multiple times.
 |---|---|---|
 | `ANGIE_MAP_WEBSOCKET_ENABLED` | `no` | Enable the WebSocket variable map, which sets the `Connection` upgrade header for upstream WebSocket proxying. |
 
+### Real IP
+
+Recover the real client address when the image runs behind a trusted proxy,
+load balancer, or ingress (uses the built-in `ngx_http_realip_module`; no
+package needed). Enabled by presence: setting `ANGIE_REAL_IP_FROM` turns it on.
+
+| Variable | Default | Description |
+|---|---|---|
+| `ANGIE_REAL_IP_FROM` | unset | Space- or comma-separated list of trusted proxy addresses/CIDRs (IPv4 or IPv6). When set, the real-IP snippet is rendered and enabled. Each entry is restricted to the characters `0-9 a-f A-F : . /`; any other character is rejected to prevent config injection. |
+| `ANGIE_REAL_IP_HEADER` | `X-Forwarded-For` | Header (or the `proxy_protocol` keyword) the real client address is read from. Restricted to `A-Za-z0-9_-`. |
+| `ANGIE_REAL_IP_RECURSIVE` | `on` | `on` walks the `X-Forwarded-For` chain right-to-left, skipping trusted addresses, to find the real client behind multiple proxies; `off` uses the last (rightmost) address in the header, the one inserted by your nearest trusted proxy. Must be `on` or `off`. |
+
+> **Security:** list **only** proxies you actually trust. A wildcard such as
+> `0.0.0.0/0` lets any client forge the chosen header and spoof `$remote_addr`,
+> which also defeats the loopback gate protecting the `/healthz` endpoint. The
+> container `HEALTHCHECK` itself is unaffected: it connects to `127.0.0.1`
+> without an `X-Forwarded-For` header, so real-IP performs no rewrite and
+> `$remote_addr` stays loopback.
+>
+> **Note:** `ANGIE_REAL_IP_HEADER=proxy_protocol` additionally requires the
+> listener to run in PROXY-protocol mode (`listen ... proxy_protocol`), which
+> the baked-in `:80` (or `:8080` unprivileged) listener does not. Supply a
+> custom vhost with a `proxy_protocol` listener via `/etc/angie/custom` to use
+> this mode.
+
+### Security headers
+
+| Variable | Default | Description |
+|---|---|---|
+| `ANGIE_SECURITY_HEADERS_ENABLED` | `no` | Emit a conservative baseline of response headers (with `always`, so they apply to error responses too): `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, `X-Frame-Options: SAMEORIGIN`, `Permissions-Policy: camera=(), microphone=(), geolocation=()`. HSTS, CSP, and the deprecated `X-XSS-Protection` are deliberately omitted -- add them per-vhost via the custom volume. |
+
+> **Note:** `add_header` does **not** merge across contexts. A `server` or
+> `location` that defines its own `add_header` replaces the inherited set,
+> dropping these headers there. If a custom vhost adds headers, repeat the
+> baseline ones too.
+
 ### Filesystem
 
 | Variable | Default | Description |
@@ -93,6 +141,12 @@ more than one causes each request to be logged multiple times.
 - `ANGIE_GZIP_STATIC_ENABLED` activates the base gzip toggle
   (`ANGIE_GZIP_ENABLED`) before enabling static. Setting only the static
   variable is sufficient.
+- `ANGIE_ZSTD_STATIC_ENABLED` activates the base zstd toggle
+  (`ANGIE_ZSTD_ENABLED`) before enabling the static module. Setting only the
+  static variable is sufficient.
+- `ANGIE_REAL_IP_HEADER` and `ANGIE_REAL_IP_RECURSIVE` are processed by the
+  real-IP entrypoint script (`35-real-ip.sh`) and have no effect unless
+  `ANGIE_REAL_IP_FROM` is set.
 - `ANGIE_LOG_FORMAT_*` variables only register a format definition. They do not
   select an active access log. Use `ANGIE_LOG_*` variables to both register and
   activate a format.

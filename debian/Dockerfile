@@ -43,6 +43,7 @@ ARG ANGIE_CTL="/usr/local/bin/angie-ctl"
 # + https://github.com/leev/ngx_http_geoip2_module
 # + https://github.com/owasp-modsecurity/ModSecurity-nginx
 # + https://github.com/yaoweibin/ngx_http_substitutions_filter_module
+# + https://github.com/tokers/zstd-nginx-module
 # DL3008: ca-certificates/curl/git/tini/wget are intentionally unpinned (they
 # track the base distro); angie and its modules ARE pinned to ${ANGIE_VERSION}:
 # the exact Debian version (e.g. 1.11.8-1~trixie) is resolved at build time from
@@ -106,6 +107,7 @@ RUN \
   angie-module-geoip2="${angie_pkg_version}" \
   angie-module-modsecurity="${angie_pkg_version}" \
   angie-module-subs="${angie_pkg_version}" \
+  angie-module-zstd="${angie_pkg_version}" \
   tini \
   wget \
   ; \

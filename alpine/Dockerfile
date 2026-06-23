@@ -31,6 +31,7 @@ ARG ANGIE_CTL="/usr/local/bin/angie-ctl"
 # + https://github.com/leev/ngx_http_geoip2_module
 # + https://github.com/owasp-modsecurity/ModSecurity-nginx
 # + https://github.com/yaoweibin/ngx_http_substitutions_filter_module
+# + https://github.com/tokers/zstd-nginx-module
 # DL3018: tini is intentionally unpinned (it tracks the base distro); angie and
 # its modules ARE pinned to ${ANGIE_VERSION} via apk's fuzzy `=~` operator, which
 # locks the upstream version while tolerating Alpine packaging revisions (-rN).
@@ -49,6 +50,7 @@ RUN \
   "angie-module-geoip2=~${ANGIE_VERSION}" \
   "angie-module-modsecurity=~${ANGIE_VERSION}" \
   "angie-module-subs=~${ANGIE_VERSION}" \
+  "angie-module-zstd=~${ANGIE_VERSION}" \
   tini \
   ; \
   ln -sf /dev/stdout /var/log/angie/access.log; \

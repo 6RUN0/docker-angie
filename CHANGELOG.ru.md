@@ -10,6 +10,21 @@
 
 ## [Не выпущено]
 
+### Добавлено
+
+- **Сжатие Zstandard** — пятый встроенный динамический модуль
+  (`angie-module-zstd`), поставляется выключенным и включается тумблерами
+  `ANGIE_ZSTD_ENABLED` / `ANGIE_ZSTD_STATIC_ENABLED`, симметрично управлению
+  Brotli и gzip.
+- **Восстановление реального IP** за доверенным прокси/балансировщиком/ingress
+  через `ANGIE_REAL_IP_FROM` (плюс `ANGIE_REAL_IP_HEADER` и
+  `ANGIE_REAL_IP_RECURSIVE`), с проверкой набора символов каждого доверенного
+  адреса для предотвращения инъекции в конфигурацию. Использует встроенный
+  модуль real-IP — без дополнительного пакета.
+- **Базовые security-заголовки ответа**, включаемые тумблером
+  `ANGIE_SECURITY_HEADERS_ENABLED` (`X-Content-Type-Options`, `Referrer-Policy`,
+  `X-Frame-Options`, `Permissions-Policy`), применяются с `always`.
+
 ## [1.11.8-build1] - 2026-06-23
 
 Первый публичный релиз: Angie 1.11.8, собранный для `linux/amd64` и `linux/arm64`.

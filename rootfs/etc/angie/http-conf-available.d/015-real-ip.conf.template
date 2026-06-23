@@ -1,0 +1,11 @@
+# Real IP — recover the client address when the image runs behind a trusted
+# proxy / load balancer / ingress.
+# https://angie.software/angie/docs/configuration/modules/http/http_realip/
+#
+# Rendered at container start by 35-real-ip.sh from ANGIE_REAL_IP_FROM and
+# friends. SECURITY: list ONLY the addresses of proxies you actually trust.
+# A wildcard (0.0.0.0/0) lets any client forge the chosen header and spoof
+# $remote_addr — which also defeats the loopback gate on the /healthz endpoint.
+%%REAL_IP_FROM_DIRECTIVES%%
+real_ip_header %%REAL_IP_HEADER%%;
+real_ip_recursive %%REAL_IP_RECURSIVE%%;

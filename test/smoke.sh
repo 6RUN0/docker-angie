@@ -211,6 +211,60 @@ assert_contains "$(dump_conf "$cid")" "custom.smoke.test" \
 docker rm -f "$cid" >/dev/null
 rm -rf "$ctmp"
 
+# --- 4h. zstd toggle (module + config) -------------------------------------
+cid=$(start -e ANGIE_ZSTD_ENABLED=1)
+wait_healthy "$cid" || fail "zstd container healthy"
+assert_contains "$(dump_conf "$cid")" "zstd on" "ANGIE_ZSTD_ENABLED enables zstd"
+mods=$(docker exec "$cid" ls /etc/angie/modules.d/ 2>/dev/null || true)
+assert_contains "$mods" "http_zstd_filter.conf" "zstd filter module enabled"
+docker rm -f "$cid" >/dev/null
+
+cid=$(start -e ANGIE_ZSTD_STATIC_ENABLED=1)
+wait_healthy "$cid" || fail "zstd_static container healthy"
+conf=$(dump_conf "$cid")
+assert_contains "$conf" "zstd_static on" "ANGIE_ZSTD_STATIC_ENABLED enables zstd_static"
+assert_contains "$conf" "zstd on" "zstd_static also pulls in base zstd"
+mods=$(docker exec "$cid" ls /etc/angie/modules.d/ 2>/dev/null || true)
+assert_contains "$mods" "http_zstd_static.conf" "zstd static module enabled"
+docker rm -f "$cid" >/dev/null
+
+# --- 4i. Real-IP: trusted proxy renders set_real_ip_from, healthz still up --
+cid=$(start -e ANGIE_REAL_IP_FROM=10.0.0.0/8)
+wait_healthy "$cid" || fail "real-ip container healthy"
+conf=$(dump_conf "$cid")
+assert_contains "$conf" "set_real_ip_from 10.0.0.0/8" "ANGIE_REAL_IP_FROM renders the trusted proxy"
+assert_contains "$conf" "real_ip_header X-Forwarded-For" "real_ip_header defaults to X-Forwarded-For"
+assert_contains "$conf" "real_ip_recursive on" "real_ip_recursive defaults to on"
+# /healthz must keep answering: the HEALTHCHECK hits 127.0.0.1 with no XFF, so
+# real-IP performs no rewrite and the loopback gate still passes.
+body=$(docker exec "$cid" wget -q -O - http://127.0.0.1/healthz 2>/dev/null || true)
+assert_eq "$body" "ok" "real-ip enabled: /healthz still returns 'ok'"
+docker rm -f "$cid" >/dev/null
+
+# --- 4i'. Real-IP charset guard: an unsafe entry aborts startup -------------
+# Mirrors the GeoIP2 injection guard: a value with a character outside the
+# IP/CIDR charset must be rejected, not substituted into the config.
+set +e
+timeout 30 docker run --rm -e 'ANGIE_REAL_IP_FROM=10.0.0.0/8;evil' "$IMAGE" >/dev/null 2>&1
+rc=$?
+set -e
+if [ "$rc" -ne 0 ] && [ "$rc" -ne 124 ]; then
+  pass "real-ip rejects an unsafe ANGIE_REAL_IP_FROM entry (exit $rc)"
+else
+  fail "real-ip rejects an unsafe ANGIE_REAL_IP_FROM entry (got exit $rc; 124=timeout means it started anyway)"
+fi
+
+# --- 4j. Security headers toggle -------------------------------------------
+cid=$(start -e ANGIE_SECURITY_HEADERS_ENABLED=1)
+wait_healthy "$cid" || fail "security-headers container healthy"
+conf=$(dump_conf "$cid")
+assert_contains "$conf" 'add_header X-Content-Type-Options "nosniff" always' \
+  "ANGIE_SECURITY_HEADERS_ENABLED adds the nosniff header"
+assert_contains "$conf" "Referrer-Policy" "security headers include Referrer-Policy"
+assert_contains "$conf" "X-Frame-Options" "security headers include X-Frame-Options"
+assert_contains "$conf" "Permissions-Policy" "security headers include Permissions-Policy"
+docker rm -f "$cid" >/dev/null
+
 # --- 5. Entrypoint fail-fast: a failing config script stops the container ---
 tmp=$(mktemp -d)
 printf '#!/bin/sh\nexit 7\n' >"$tmp/99-zz-fail.sh"

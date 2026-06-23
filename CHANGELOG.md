@@ -10,6 +10,20 @@ itself. The build number increments when the same Angie version is repackaged
 
 ## [Unreleased]
 
+### Added
+
+- **Zstandard compression** — a fifth bundled dynamic module
+  (`angie-module-zstd`), shipped disabled and toggled with `ANGIE_ZSTD_ENABLED`
+  / `ANGIE_ZSTD_STATIC_ENABLED`, symmetric to the Brotli and gzip controls.
+- **Real-IP recovery** behind a trusted proxy/load balancer/ingress via
+  `ANGIE_REAL_IP_FROM` (plus `ANGIE_REAL_IP_HEADER` and
+  `ANGIE_REAL_IP_RECURSIVE`), with charset validation of every trusted-proxy
+  entry to prevent config injection. Uses the built-in real-IP module — no extra
+  package.
+- **Baseline security response headers** toggled with
+  `ANGIE_SECURITY_HEADERS_ENABLED` (`X-Content-Type-Options`, `Referrer-Policy`,
+  `X-Frame-Options`, `Permissions-Policy`), applied with `always`.
+
 ## [1.11.8-build1] - 2026-06-23
 
 First public release: Angie 1.11.8 packaged for `linux/amd64` and `linux/arm64`.
