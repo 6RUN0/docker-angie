@@ -385,7 +385,46 @@ else
 fi
 docker rm -f "$cid" >/dev/null
 
-# --- 4o. declarative reset: brotli stays on when its variable is set ---------
+# --- 4o. full startup tolerates a geoip2 orphan with an earlier toggle on -----
+# Regression guard for the real ordering. The geoip2 orphan cleanup lives in
+# 40-log/50-geoip2, but EARLIER toggles (40-brotli, 40-gzip) enable their own
+# snippets first. While angie-ctl validated per enable, 40-gzip ran `angie -t`
+# with the orphan still active and aborted startup before 40-log could clear it
+# -- so 4k/4l (which heal in isolation) passed while real startup still broke.
+# Toggles now mutate with --no-test and the entrypoint validates once at the end
+# (see docker-entrypoint.sh), making the transient orphan harmless. Inject the
+# orphan, replay the WHOLE entrypoint config phase with gzip on, and confirm no
+# script aborts and the assembled config is valid.
+cid=$(start -e ANGIE_GZIP_ENABLED=1)
+wait_healthy "$cid" || fail "full-startup orphan container healthy"
+link_active "$cid" ../http-conf-available.d/030-log-format-logfmt-with-geoip2.conf \
+  /etc/angie/http-conf.d/030-log-format-logfmt-with-geoip2.conf
+link_active "$cid" ../http-conf-available.d/040-log-logfmt-with-geoip2.conf \
+  /etc/angie/http-conf.d/040-log-logfmt-with-geoip2.conf
+if docker exec "$cid" angie -t >/dev/null 2>&1; then
+  fail "sanity: injected geoip2 orphan should break angie -t"
+else
+  pass "sanity: injected geoip2 orphan breaks angie -t"
+fi
+# Replay every NN-*.sh in glob (== numeric) order, as a restart on a persistent
+# /etc/angie volume would, with ANGIE_GZIP_ENABLED still set. `set -e` makes an
+# aborting toggle (the old 40-gzip failure) fail this step.
+if docker exec "$cid" sh -c 'set -e; for f in /docker-entrypoint.d/*.sh; do [ -x "$f" ] || continue; "$f" >/dev/null; done'; then
+  pass "full entrypoint replay completes with gzip on (no early toggle trips on the orphan)"
+else
+  fail "full entrypoint replay aborted (an early toggle tripped over the geoip2 orphan)"
+fi
+if docker exec "$cid" angie -t >/dev/null 2>&1; then
+  pass "assembled config valid after full replay; orphan cleared, gzip on"
+else
+  fail "assembled config invalid after full replay"
+fi
+assert_contains "$(dump_conf "$cid")" "gzip on" "gzip still enabled after full replay"
+assert_disabled "$cid" "geoip2 orphan removed by full replay" \
+  logfmt-with-geoip2.conf /etc/angie/http-conf.d/
+docker rm -f "$cid" >/dev/null
+
+# --- 4p. declarative reset: brotli stays on when its variable is set ---------
 # The reset must not break the happy path: with ANGIE_BROTLI_ENABLED set,
 # 40-brotli.sh re-enables config + module after the initial reset.
 cid=$(start -e ANGIE_BROTLI_ENABLED=1)

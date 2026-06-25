@@ -9,9 +9,8 @@ skip_toggle_unless_writable
 # and both early `exit 0` paths (GEOIP2_DB_COUNTRY unset, or its DB
 # unreadable) would otherwise leave an orphaned `geoip2 <path>` map pointing at a
 # possibly-gone database. angie's geoip2 module opens the mmdb at config load, so
-# a stale path fails `angie -t` for the whole config. Re-enabled when
-# geoip2 genuinely comes up. The map consumes $geoip2_country_code, so disable it
-# before its module.
+# a stale map left in the final config fails `angie -t` (see
+# docker-entrypoint.sh). Re-enabled when geoip2 genuinely comes up.
 reset_httpconf 025-geoip2.conf
 reset_module http_geoip2.conf
 
@@ -37,7 +36,7 @@ esac
 : "${ANGIE_LOG_FORMAT_LOGFMT_GEOIP2:=no}"
 : "${ANGIE_LOG_LOGFMT_GEOIP2:=no}"
 
-angie-ctl mod en http_geoip2.conf &&
+ngx_ctl mod en http_geoip2.conf &&
   ngx_info "GeoIP2 module enabled"
 
 # Render the active config from the pristine template every start: idempotent
@@ -45,7 +44,7 @@ angie-ctl mod en http_geoip2.conf &&
 # mutated in place. The validated charset above keeps the '|' delimiter safe.
 geoip2_conf="/etc/angie/http-conf-available.d/025-geoip2.conf"
 sed -e "s|%%GEOIP2_DB_COUNTRY%%|$GEOIP2_DB_COUNTRY|g" "${geoip2_conf}.template" >"$geoip2_conf"
-angie-ctl httpconf en 025-geoip2.conf &&
+ngx_ctl httpconf en 025-geoip2.conf &&
   ngx_info "GeoIP2 database configured: ${GEOIP2_DB_COUNTRY}"
 
 case "${ANGIE_LOG_FORMAT_LOGFMT_GEOIP2}" in

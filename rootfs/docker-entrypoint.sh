@@ -53,6 +53,19 @@ elif [ "$1" = "angie" ] || [ "$1" = "angie-debug" ]; then
   else
     ngx_notice "no files found in $entrypoint_dir, skipping configuration"
   fi
+
+  # Single authoritative config test. The toggle scripts mutate config through
+  # angie-ctl --no-test, so this is the only `angie -t` of the run: it validates
+  # the fully-assembled final state once, here. A transient inconsistency while
+  # toggling -- e.g. an orphaned geoip2 log format not yet reset when an earlier
+  # script enabled its own snippet -- is therefore harmless; only the final state
+  # is tested. Fail loudly with the test output instead of letting the `exec`
+  # below start angie on a config that cannot load.
+  if ! ngx_test_output=$("$1" -t 2>&1); then
+    ngx_err "assembled configuration failed '$1 -t', aborting startup"
+    printf '%s\n' "$ngx_test_output" >&2
+    exit 1
+  fi
 fi
 
 if [ -n "${1:-}" ] && { [ -x "$1" ] || [ -x "$(command -v "$1" 2>/dev/null)" ]; }; then

@@ -13,7 +13,7 @@ reset_module http_modsecurity.conf
 
 case "${ANGIE_MODSECURITY_ENABLED}" in
 yes | on | 1 | true | enable | enabled)
-  angie-ctl mod en "http_modsecurity.conf" &&
+  ngx_ctl mod en "http_modsecurity.conf" &&
     ngx_info "ModSecurity module is enabled"
   ;;
 esac

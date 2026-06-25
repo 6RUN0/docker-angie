@@ -15,13 +15,13 @@ skip_toggle_unless_writable
 reset_httpconf 021-gzip_static.conf 020-gzip.conf
 
 enable_gzip() {
-  angie-ctl httpconf en "020-gzip.conf" &&
+  ngx_ctl httpconf en "020-gzip.conf" &&
     ngx_info "gzip configuration is enabled"
 }
 
 enable_gzip_static() {
   enable_gzip
-  angie-ctl httpconf en "021-gzip_static.conf" &&
+  ngx_ctl httpconf en "021-gzip_static.conf" &&
     ngx_info "gzip static compression enabled"
 }
 

@@ -14,7 +14,7 @@ reset_httpconf 060-map-websocket.conf
 
 case "${ANGIE_MAP_WEBSOCKET_ENABLED}" in
 yes | on | 1 | true | enable | enabled)
-  angie-ctl httpconf en "060-map-websocket.conf" &&
+  ngx_ctl httpconf en "060-map-websocket.conf" &&
     ngx_info "variable map for WebSocket is enabled"
   ;;
 esac

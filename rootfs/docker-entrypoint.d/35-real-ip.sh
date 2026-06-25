@@ -80,5 +80,5 @@ sed \
   -e "s|%%REAL_IP_RECURSIVE%%|${ANGIE_REAL_IP_RECURSIVE}|g" \
   "${real_ip_conf}.template" >"$real_ip_conf"
 
-angie-ctl httpconf en 015-real-ip.conf &&
+ngx_ctl httpconf en 015-real-ip.conf &&
   ngx_info "Real IP configured for trusted proxies: ${ANGIE_REAL_IP_FROM}"

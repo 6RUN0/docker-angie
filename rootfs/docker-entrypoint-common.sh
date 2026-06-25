@@ -52,41 +52,51 @@ skip_toggle_unless_writable() {
 # Directory holding the shippable (disabled-by-default) http-conf snippets.
 HTTP_CONF_AVAILABLE_DIR="/etc/angie/http-conf-available.d"
 
+# Every entrypoint config mutation goes through angie-ctl with --no-test, so no
+# single en/dis runs `angie -t`. The entrypoint validates the assembled config
+# once at the very end (see docker-entrypoint.sh). This removes an ordering
+# trap: angie validates the variables of EVERY declared log_format (and every
+# directive) on each `angie -t`, so while one toggle enables its snippet, an
+# orphan from another feature not yet reset this run (e.g. a geoip2 log format
+# outliving geoip2 on a persistent /etc/angie volume) would otherwise poison
+# that intermediate test and abort startup at an unrelated, earlier script. With
+# validation deferred, only the final, fully-reset state is ever tested.
+ngx_ctl() {
+  angie-ctl --no-test "$@"
+}
+
 # Feature toggles are declarative: each NN-*.sh resets the snippets/modules it
 # owns at the start of every run, then re-enables only what the current
 # environment asks for. Without this, toggles would be enable-only -- a feature
 # enabled on a prior run survives as an orphaned symlink on a persistent
-# /etc/angie volume, so removing its ANGIE_* variable could not turn it off, and
-# in the worst case (a snippet referencing a directive/variable from a now-absent
-# module) the orphan fails `angie -t` for the whole config. These reset helpers
-# centralise that "disable then conditionally enable" pattern.
+# /etc/angie volume, so removing its ANGIE_* variable could not turn it off.
+# These reset helpers centralise that "disable then conditionally enable"
+# pattern.
 #
 # `reset_httpconf` takes basenames or shell globs matched against the available
-# dir; `reset_module` takes module-load basenames. Both are idempotent: a
-# snippet that is not currently enabled is a no-op. Disable a snippet that
-# *consumes* a directive/variable before the module that *provides* it so the
-# per-call `angie -t` never sees a dangling reference. Guard every call with
-# `|| true`: angie-ctl validates on disable and leaves the removal in place even
-# when that intermediate test fails, so the clean state settles after the batch.
+# dir; `reset_module` takes module-load basenames. Both are idempotent. Guard
+# every disable with `|| true`: resetting a snippet that is not currently
+# enabled is a normal no-op, but angie-ctl exits non-zero for "not enabled",
+# which would otherwise abort these `set -e` scripts.
 reset_httpconf() {
   # Distinct __reset_ prefix: POSIX sh has no `local`, so these loop variables
   # leak into the caller; the prefix avoids clobbering a caller's own _path/_name.
   for __reset_pattern in "$@"; do
     for __reset_path in "$HTTP_CONF_AVAILABLE_DIR"/$__reset_pattern; do
       [ -e "$__reset_path" ] || continue # glob matched nothing: nothing to disable
-      angie-ctl httpconf dis "$(basename "$__reset_path")" >/dev/null 2>&1 || true
+      ngx_ctl httpconf dis "$(basename "$__reset_path")" >/dev/null 2>&1 || true
     done
   done
 }
 
 reset_module() {
   for __reset_name in "$@"; do
-    angie-ctl mod dis "$__reset_name" >/dev/null 2>&1 || true
+    ngx_ctl mod dis "$__reset_name" >/dev/null 2>&1 || true
   done
 }
 
 enable_log_format() {
-  angie-ctl httpconf en "030-log-format-$1.conf" &&
+  ngx_ctl httpconf en "030-log-format-$1.conf" &&
     ngx_info "Enabled $1 log format"
 }
 
@@ -100,6 +110,6 @@ enable_log() {
   # restarts and lets a later script (e.g. 50-geoip2) override an earlier default
   # (40-log) cleanly instead of stacking a second access_log directive.
   reset_httpconf '040-log-*.conf'
-  angie-ctl httpconf en "040-log-$1.conf" &&
+  ngx_ctl httpconf en "040-log-$1.conf" &&
     ngx_info "Use $1 format for access log"
 }

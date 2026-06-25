@@ -18,12 +18,11 @@ skip_toggle_unless_writable
 # every log-format definition left active by a previous run. On a persistent
 # /etc/angie volume these symlinks survive container recreation, so without this
 # a format/log whose ANGIE_LOG_* variable was removed would stay active. It also
-# clears the geoip2 log format, which references $geoip2_country_code and would
-# fail `angie -t` for the whole config once geoip2 is no longer up (angie
-# validates the variables of EVERY declared log_format). The geoip2 format/log
-# is re-enabled only when geoip2 is genuinely up.
-# Disable access logs (consumers) before format definitions (providers) so the
-# intermediate `angie -t` never sees a dangling access_log.
+# clears the geoip2 log format, which references $geoip2_country_code: angie
+# validates the variables of EVERY declared log_format, so leaving it active once
+# geoip2 is no longer up would fail the final `angie -t` (see
+# docker-entrypoint.sh). The geoip2 format/log is re-enabled only when geoip2 is
+# genuinely up.
 reset_httpconf '040-log-*.conf' '030-log-format-*.conf'
 
 case "${ANGIE_LOG_FORMAT_EXTENDED}" in

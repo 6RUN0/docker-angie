@@ -62,23 +62,32 @@ into the active `.d/` dir.
 
 - `rootfs/docker-entrypoint.sh` — only runs the configuration phase when `$1` is
   `angie`/`angie-debug`. It executes every executable `*.sh` in
-  `/docker-entrypoint.d/` in `sort -V` order, then `exec "$@"`. Non-executable or
-  non-`.sh` files are skipped with a warning.
+  `/docker-entrypoint.d/` in `sort -V` order, then validates the fully-assembled
+  config once with a final `angie -t` (fail-fast) before `exec "$@"`. The toggles
+  mutate config with `angie-ctl --no-test`, so this is the **only** config test
+  of the run — a transient inconsistency mid-toggling (e.g. an orphaned geoip2
+  log format not yet reset when an earlier toggle enabled its snippet) is
+  harmless; only the final state is tested. Non-executable or non-`.sh` files are
+  skipped with a warning.
 - `rootfs/docker-entrypoint-common.sh` is **sourced** by every entrypoint script.
   It provides the `ngx_err/ngx_warning/ngx_notice/ngx_info` loggers (gated by
-  `ANGIE_ENTRYPOINT_QUIET_LOGS`) and the `enable_log_format`/`enable_log` helpers.
-  Logging goes to fd 3, which maps to stderr or `/dev/null` when quiet.
+  `ANGIE_ENTRYPOINT_QUIET_LOGS`), the `ngx_ctl` wrapper (`angie-ctl --no-test`),
+  the `reset_httpconf`/`reset_module` declarative-reset helpers, and the
+  `enable_log_format`/`enable_log` helpers. Logging goes to fd 3, which maps to
+  stderr or `/dev/null` when quiet.
 - `rootfs/docker-entrypoint.d/NN-*.sh` — one feature toggle per file, numbered to
   control order (30 tune, 35 real-ip, 40 features, 45 security headers,
   50 geoip2, 60 websocket, 90 permission fixups). Each reads its `ANGIE_*` env
-  var and calls `angie-ctl` to enable the
-  corresponding snippet. The conventional toggle pattern is:
+  var and calls `ngx_ctl` (the `angie-ctl --no-test` wrapper from
+  `docker-entrypoint-common.sh`) to enable the corresponding snippet — never bare
+  `angie-ctl`, so the per-call config test stays deferred to the entrypoint's
+  final `angie -t`. The conventional toggle pattern is:
 
   ```sh
   : "${ANGIE_SOME_FEATURE:=no}"
   case "${ANGIE_SOME_FEATURE}" in
   yes | on | 1 | true | enable | enabled)
-    angie-ctl httpconf en "NNN-snippet.conf"
+    ngx_ctl httpconf en "NNN-snippet.conf"
     ;;
   esac
   ```

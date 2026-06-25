@@ -16,17 +16,17 @@ reset_httpconf 021-brotli_static.conf 020-brotli.conf
 reset_module http_brotli_static.conf http_brotli_filter.conf
 
 enable_brotli() {
-  angie-ctl mod en "http_brotli_filter.conf" &&
+  ngx_ctl mod en "http_brotli_filter.conf" &&
     ngx_info "Brotli module is enabled"
-  angie-ctl httpconf en "020-brotli.conf" &&
+  ngx_ctl httpconf en "020-brotli.conf" &&
     ngx_info "Brotli configuration is enabled"
 }
 
 enable_brotli_static() {
   enable_brotli
-  angie-ctl mod en "http_brotli_static.conf" &&
+  ngx_ctl mod en "http_brotli_static.conf" &&
     ngx_info "Brotli static module is enabled"
-  angie-ctl httpconf en "021-brotli_static.conf" &&
+  ngx_ctl httpconf en "021-brotli_static.conf" &&
     ngx_info "Brotli static compression enabled"
 }
 

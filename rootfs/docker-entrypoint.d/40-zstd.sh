@@ -16,17 +16,17 @@ reset_httpconf 021-zstd_static.conf 020-zstd.conf
 reset_module http_zstd_static.conf http_zstd_filter.conf
 
 enable_zstd() {
-  angie-ctl mod en "http_zstd_filter.conf" &&
+  ngx_ctl mod en "http_zstd_filter.conf" &&
     ngx_info "Zstd module is enabled"
-  angie-ctl httpconf en "020-zstd.conf" &&
+  ngx_ctl httpconf en "020-zstd.conf" &&
     ngx_info "Zstd configuration is enabled"
 }
 
 enable_zstd_static() {
   enable_zstd
-  angie-ctl mod en "http_zstd_static.conf" &&
+  ngx_ctl mod en "http_zstd_static.conf" &&
     ngx_info "Zstd static module is enabled"
-  angie-ctl httpconf en "021-zstd_static.conf" &&
+  ngx_ctl httpconf en "021-zstd_static.conf" &&
     ngx_info "Zstd static compression enabled"
 }
 

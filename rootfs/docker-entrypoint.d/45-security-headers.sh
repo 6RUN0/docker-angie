@@ -14,7 +14,7 @@ reset_httpconf 055-security-headers.conf
 
 case "${ANGIE_SECURITY_HEADERS_ENABLED}" in
 yes | on | 1 | true | enable | enabled)
-  angie-ctl httpconf en "055-security-headers.conf" &&
+  ngx_ctl httpconf en "055-security-headers.conf" &&
     ngx_info "Security headers are enabled"
   ;;
 esac
