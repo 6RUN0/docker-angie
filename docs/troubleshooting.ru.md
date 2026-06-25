@@ -214,6 +214,19 @@ docker run \
 docker exec <container> angie -T 2>/dev/null | grep geoip2
 ```
 
+**Связанное — старт прерывается с `unknown "geoip2_country_code" variable`.**
+geoip2-формат лога, включённый на предыдущем запуске, может пережить geoip2 на
+персистентном томе `/etc/angie`. angie проверяет переменные в каждом объявленном
+`log_format`, поэтому осиротевший формат `*-with-geoip2` валит `angie -t` для
+всего конфига, даже если не используется. `40-log.sh` снимает эти сниппеты при
+старте, так что пересоздание контейнера лечит проблему; на работающем контейнере
+выключите осиротевший сниппет (сначала access_log, затем его формат):
+
+```sh
+docker exec <container> angie-ctl httpconf dis 040-log-logfmt-with-geoip2.conf
+docker exec <container> angie-ctl httpconf dis 030-log-format-logfmt-with-geoip2.conf
+```
+
 ---
 
 ## 6. ModSecurity включён, но ничего не блокирует

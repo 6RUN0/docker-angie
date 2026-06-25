@@ -10,6 +10,14 @@ itself. The build number increments when the same Angie version is repackaged
 
 ## [Unreleased]
 
+### Fixed
+
+- A geoip2 log format left active by a prior run no longer breaks startup when
+  geoip2 is disabled. `40-log.sh` now clears the orphaned `*-with-geoip2` log
+  snippets before selecting a log (`50-geoip2.sh` re-enables them when geoip2 is
+  active), so `angie -t` no longer fails with `unknown "geoip2_country_code"
+  variable` on a persistent `/etc/angie` volume.
+
 ## [1.11.8-build2] - 2026-06-23
 
 ### Added

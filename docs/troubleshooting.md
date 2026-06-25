@@ -205,6 +205,19 @@ Verify the module loaded:
 docker exec <container> angie -T 2>/dev/null | grep geoip2
 ```
 
+**Related — startup aborts with `unknown "geoip2_country_code" variable`.** A
+geoip2 log format enabled on a previous run can outlive geoip2 on a persistent
+`/etc/angie` volume. angie validates the variables of every declared
+`log_format`, so the orphaned `*-with-geoip2` format fails `angie -t` for the
+whole config even when unused. `40-log.sh` clears these snippets at startup, so
+recreating the container heals it; to fix a running container, disable the
+orphan (the access log before its format):
+
+```sh
+docker exec <container> angie-ctl httpconf dis 040-log-logfmt-with-geoip2.conf
+docker exec <container> angie-ctl httpconf dis 030-log-format-logfmt-with-geoip2.conf
+```
+
 ---
 
 ## 6. ModSecurity is enabled but nothing is blocked

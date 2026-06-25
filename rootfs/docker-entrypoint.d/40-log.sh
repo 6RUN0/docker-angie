@@ -14,6 +14,19 @@ skip_toggle_unless_writable
 : "${ANGIE_LOG_MAIN:=no}"
 : "${ANGIE_LOG_MATOMO:=no}"
 
+# Clear any geoip2 log format left active by a previous run before selecting a
+# log below. That format references $geoip2_country_code, a variable that only
+# exists while the geoip2 module + map (025-geoip2.conf) are active; angie
+# validates the variables of EVERY declared log_format, used or not, so an
+# orphaned geoip2 format on a persistent /etc/angie volume fails `angie -t` for
+# the whole config. This script runs before 50-geoip2, which re-enables these
+# when geoip2 is genuinely up. Disable the access_log before its format
+# definition; angie-ctl validates on disable and leaves the change in place on
+# failure (the intermediate test still sees the other snippet), so guard with
+# `|| true` and let the clean state settle after both calls.
+angie-ctl httpconf dis 040-log-logfmt-with-geoip2.conf >/dev/null 2>&1 || true
+angie-ctl httpconf dis 030-log-format-logfmt-with-geoip2.conf >/dev/null 2>&1 || true
+
 case "${ANGIE_LOG_FORMAT_EXTENDED}" in
 yes | on | 1 | true | enable | enabled)
   enable_log_format "extended"

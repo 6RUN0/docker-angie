@@ -265,6 +265,34 @@ assert_contains "$conf" "X-Frame-Options" "security headers include X-Frame-Opti
 assert_contains "$conf" "Permissions-Policy" "security headers include Permissions-Policy"
 docker rm -f "$cid" >/dev/null
 
+# --- 4k. geoip2 log-format orphan self-heals when geoip2 is off -------------
+# A geoip2 log format left active by a prior run (persistent /etc/angie volume)
+# references $geoip2_country_code, which only exists with geoip2 up. angie
+# validates every log_format, so the orphan breaks `angie -t` for the whole
+# config. 40-log must clear it before selecting a log. Inject the orphan, re-run
+# 40-log.sh (simulating the next start), and confirm the config is valid again.
+cid=$(start)
+wait_healthy "$cid" || fail "orphan-heal container healthy"
+docker exec "$cid" ln -sf ../http-conf-available.d/030-log-format-logfmt-with-geoip2.conf \
+  /etc/angie/http-conf.d/030-log-format-logfmt-with-geoip2.conf
+if docker exec "$cid" angie -t >/dev/null 2>&1; then
+  fail "sanity: orphaned geoip2 log format should break angie -t"
+else
+  pass "sanity: orphaned geoip2 log format breaks angie -t"
+fi
+docker exec "$cid" sh /docker-entrypoint.d/40-log.sh >/dev/null 2>&1 || true
+if docker exec "$cid" angie -t >/dev/null 2>&1; then
+  pass "40-log.sh disables the geoip2 orphan, angie -t valid again"
+else
+  fail "40-log.sh did not heal the geoip2 orphan"
+fi
+left=$(docker exec "$cid" ls /etc/angie/http-conf.d/ 2>/dev/null || true)
+case "$left" in
+*030-log-format-logfmt-with-geoip2.conf*) fail "geoip2 orphan still enabled after 40-log.sh" ;;
+*) pass "geoip2 orphan symlink removed" ;;
+esac
+docker rm -f "$cid" >/dev/null
+
 # --- 5. Entrypoint fail-fast: a failing config script stops the container ---
 tmp=$(mktemp -d)
 printf '#!/bin/sh\nexit 7\n' >"$tmp/99-zz-fail.sh"
