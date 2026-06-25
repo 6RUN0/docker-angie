@@ -57,6 +57,9 @@ ARG ANGIE_CTL="/usr/local/bin/angie-ctl"
 # hadolint ignore=DL3008,DL3003,SC1091,DL4006
 RUN \
   set -eux; \
+  # Silence debconf's interactive-frontend fallback chatter during apt. Scoped to
+  # this layer via export (not a persistent ENV) so the runtime image is unaffected.
+  export DEBIAN_FRONTEND=noninteractive; \
   # Configure apt to use a local mirror
   apt_mirror() { \
   sed -i \
