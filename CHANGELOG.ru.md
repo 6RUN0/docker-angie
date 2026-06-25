@@ -10,6 +10,8 @@
 
 ## [Не выпущено]
 
+## [1.11.8-build3] - 2026-06-25
+
 ### Изменено
 
 - Тумблеры фич теперь декларативны. Каждый тогл entrypoint в начале запуска
@@ -85,6 +87,7 @@
 - Публикация в GitHub Container Registry (`ghcr.io/6run0/docker-angie`) и
   Docker Hub (`6run0/angie`) с неизменяемыми тегами `…-build<N>` и плавающими тегами.
 
-[Не выпущено]: https://github.com/6RUN0/docker-angie/compare/v1.11.8-build2...HEAD
+[Не выпущено]: https://github.com/6RUN0/docker-angie/compare/v1.11.8-build3...HEAD
+[1.11.8-build3]: https://github.com/6RUN0/docker-angie/releases/tag/v1.11.8-build3
 [1.11.8-build2]: https://github.com/6RUN0/docker-angie/releases/tag/v1.11.8-build2
 [1.11.8-build1]: https://github.com/6RUN0/docker-angie/releases/tag/v1.11.8-build1

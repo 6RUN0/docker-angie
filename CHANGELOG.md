@@ -10,6 +10,8 @@ itself. The build number increments when the same Angie version is repackaged
 
 ## [Unreleased]
 
+## [1.11.8-build3] - 2026-06-25
+
 ### Changed
 
 - Feature toggles are now declarative. Every entrypoint toggle resets the
@@ -79,6 +81,7 @@ First public release: Angie 1.11.8 packaged for `linux/amd64` and `linux/arm64`.
 - Published to the GitHub Container Registry (`ghcr.io/6run0/docker-angie`) and
   Docker Hub (`6run0/angie`) with immutable `…-build<N>` and floating tags.
 
-[Unreleased]: https://github.com/6RUN0/docker-angie/compare/v1.11.8-build2...HEAD
+[Unreleased]: https://github.com/6RUN0/docker-angie/compare/v1.11.8-build3...HEAD
+[1.11.8-build3]: https://github.com/6RUN0/docker-angie/releases/tag/v1.11.8-build3
 [1.11.8-build2]: https://github.com/6RUN0/docker-angie/releases/tag/v1.11.8-build2
 [1.11.8-build1]: https://github.com/6RUN0/docker-angie/releases/tag/v1.11.8-build1
