@@ -26,6 +26,18 @@ GIXY ?= uvx --from gixy-ng gixy
 ACTIONLINT ?= actionlint
 ZIZMOR ?= zizmor
 
+# Markdown documentation linters. typos (spelling) and rumdl (style) are offline
+# and run as part of `lint`; lychee checks links over the network, so it is a
+# separate on-demand target (mirroring lint-config / lint-config-full). Override
+# any to use another install (e.g. RUMDL='uvx rumdl').
+TYPOS ?= typos
+RUMDL ?= rumdl
+LYCHEE ?= lychee
+
+# Markdown docs to lint: the docs/ tree plus the changelogs and per-locale READMEs.
+DOC_DIR := docs
+DOC_FILES := README.md README.ru.md CHANGELOG.md CHANGELOG.ru.md
+
 .DEFAULT_GOAL := help
 
 .PHONY: help
@@ -34,7 +46,7 @@ help: ## Show this help
 		| awk 'BEGIN{FS=":.*?## "}{printf "  \033[36m%-26s\033[0m %s\n", $$1, $$2}'
 
 .PHONY: lint
-lint: lint-shell lint-docker lint-config lint-ci ## Run all linters
+lint: lint-shell lint-docker lint-config lint-ci lint-docs ## Run all linters
 
 .PHONY: lint-shell
 lint-shell: ## shellcheck entrypoint (POSIX sh) and test scripts
@@ -70,6 +82,21 @@ lint-config-full: ## gixy security-lint of the full effective config (needs $(IM
 	docker rm -f $$cid >/dev/null; \
 	if [ -z "$$ok" ]; then echo "lint-config-full: angie -T did not succeed" >&2; rm -f "$$tmp"; exit 1; fi; \
 	$(GIXY) "$$tmp"; rc=$$?; rm -f "$$tmp"; exit $$rc
+
+# typos (spelling) + rumdl (style) lint of the markdown docs, offline. rumdl
+# silently drops directory arguments when files are passed alongside, so the
+# docs/ tree and the loose root files are checked in separate calls. MD013 (line
+# length) is disabled: prose is hand-wrapped and Cyrillic columns differ from
+# rumdl's 80-char default.
+.PHONY: lint-docs
+lint-docs: ## typos + rumdl lint of the markdown docs (offline)
+	$(TYPOS) $(DOC_DIR) $(DOC_FILES)
+	$(RUMDL) check --disable MD013 $(DOC_DIR)
+	$(RUMDL) check --disable MD013 $(DOC_FILES)
+
+.PHONY: lint-docs-links
+lint-docs-links: ## lychee link-check of the markdown docs (hits the network)
+	$(LYCHEE) --no-progress $(DOC_DIR) $(DOC_FILES)
 
 .PHONY: build
 build: build-alpine build-debian build-alpine-unprivileged build-debian-unprivileged ## Build all images
