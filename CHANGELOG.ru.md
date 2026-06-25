@@ -10,6 +10,21 @@
 
 ## [Не выпущено]
 
+## [1.11.8-build4] - 2026-06-26
+
+### Исправлено
+
+- Старт больше не прерывается из-за временно осиротевшего сниппета, оставленного
+  более ранним тоглом на персистентном томе `/etc/angie`. Тоглы entrypoint теперь
+  меняют конфигурацию через `angie-ctl --no-test`, а entrypoint один раз
+  проверяет полностью собранную конфигурацию единственным финальным `angie -t`
+  перед запуском angie. Раньше каждый тогл запускал свой `angie -t` на
+  полусобранном состоянии, поэтому осиротевший элемент одной фичи (например,
+  geoip2-формат лога, переживший geoip2) мог провалить этот промежуточный тест и
+  оборвать старт на постороннем, более раннем скрипте. Финальный тест также
+  закрывает брешь, при которой неспособная загрузиться конфигурация уводила
+  angie в краш-луп после `exec` — теперь старт громко падает с выводом теста.
+
 ## [1.11.8-build3] - 2026-06-25
 
 ### Изменено
@@ -87,7 +102,8 @@
 - Публикация в GitHub Container Registry (`ghcr.io/6run0/docker-angie`) и
   Docker Hub (`6run0/angie`) с неизменяемыми тегами `…-build<N>` и плавающими тегами.
 
-[Не выпущено]: https://github.com/6RUN0/docker-angie/compare/v1.11.8-build3...HEAD
+[Не выпущено]: https://github.com/6RUN0/docker-angie/compare/v1.11.8-build4...HEAD
+[1.11.8-build4]: https://github.com/6RUN0/docker-angie/releases/tag/v1.11.8-build4
 [1.11.8-build3]: https://github.com/6RUN0/docker-angie/releases/tag/v1.11.8-build3
 [1.11.8-build2]: https://github.com/6RUN0/docker-angie/releases/tag/v1.11.8-build2
 [1.11.8-build1]: https://github.com/6RUN0/docker-angie/releases/tag/v1.11.8-build1

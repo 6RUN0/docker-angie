@@ -10,6 +10,21 @@ itself. The build number increments when the same Angie version is repackaged
 
 ## [Unreleased]
 
+## [1.11.8-build4] - 2026-06-26
+
+### Fixed
+
+- Startup no longer aborts on a transient orphaned snippet left by an earlier
+  toggle on a persistent `/etc/angie` volume. Entrypoint toggles now mutate
+  config with `angie-ctl --no-test`, and the entrypoint validates the
+  fully-assembled config once with a single final `angie -t` before starting
+  angie. Previously each toggle ran its own `angie -t` against a half-assembled
+  state, so an orphan from one feature (e.g. a geoip2 log format outliving
+  geoip2) could fail that intermediate test and abort startup at an unrelated,
+  earlier script. The final test also closes a gap where a config that cannot
+  load would crash-loop angie after `exec` — it now fails loudly with the test
+  output instead.
+
 ## [1.11.8-build3] - 2026-06-25
 
 ### Changed
@@ -81,7 +96,8 @@ First public release: Angie 1.11.8 packaged for `linux/amd64` and `linux/arm64`.
 - Published to the GitHub Container Registry (`ghcr.io/6run0/docker-angie`) and
   Docker Hub (`6run0/angie`) with immutable `…-build<N>` and floating tags.
 
-[Unreleased]: https://github.com/6RUN0/docker-angie/compare/v1.11.8-build3...HEAD
+[Unreleased]: https://github.com/6RUN0/docker-angie/compare/v1.11.8-build4...HEAD
+[1.11.8-build4]: https://github.com/6RUN0/docker-angie/releases/tag/v1.11.8-build4
 [1.11.8-build3]: https://github.com/6RUN0/docker-angie/releases/tag/v1.11.8-build3
 [1.11.8-build2]: https://github.com/6RUN0/docker-angie/releases/tag/v1.11.8-build2
 [1.11.8-build1]: https://github.com/6RUN0/docker-angie/releases/tag/v1.11.8-build1

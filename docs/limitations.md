@@ -44,7 +44,7 @@ so HTTPS is not served out of the box. To terminate TLS, add a vhost with an
 
 The `latest` tag on Docker Hub (`6run0/angie`) and GHCR
 (`ghcr.io/6run0/docker-angie`) resolves to the Alpine variant. To use the Debian
-variant, pull an explicit tag such as `debian` or `1.11.8-build3-debian`. There
+variant, pull an explicit tag such as `debian` or `1.11.8-build4-debian`. There
 is no `latest-debian` convenience alias.
 
 ## 6. Worker-process autotune is a no-op on a read-only filesystem

@@ -215,7 +215,7 @@ docker run -v /host/cache:/var/cache/angie \
 | Аргумент | По умолчанию | Описание |
 |---|---|---|
 | `ANGIE_VERSION` | текущий пин | Устанавливаемая версия Angie (ядро + все модули), запинена через оператор `=~` в apk и резолв `madison` в apt — образ воспроизводим. Release-workflow подставляет её из git-тега и отказывается публиковать, если она расходится с пином. |
-| `IMAGE_VERSION` | `dev` | Версия упаковки в метке `org.opencontainers.image.version` (тег образа без суффикса варианта, например `1.11.8-build3`). Задаётся release-workflow. |
+| `IMAGE_VERSION` | `dev` | Версия упаковки в метке `org.opencontainers.image.version` (тег образа без суффикса варианта, например `1.11.8-build4`). Задаётся release-workflow. |
 | `VCS_REF` | пусто | Коммит источника в метке `org.opencontainers.image.revision`. Задаётся release-workflow. |
 
 Образ несёт OCI-метки: набор `org.opencontainers.image.*` (`title`,
