@@ -4,6 +4,16 @@
 
 skip_toggle_unless_writable
 
+# Reset real-ip before deciding whether it is on this start. On a persistent
+# /etc/angie volume the active 015-real-ip.conf symlink survives container
+# recreation; the early `exit 0` would otherwise keep trusting the OLD
+# set_real_ip_from list after the operator removed ANGIE_REAL_IP_FROM to turn
+# real-ip off. Core realip directives never fail `angie -t`, so this is a silent
+# security trap rather than a startup break: a stale trusted-proxy range lets a
+# client forge the real-ip header and spoof $remote_addr. Re-rendered and
+# re-enabled when ANGIE_REAL_IP_FROM is set.
+reset_httpconf 015-real-ip.conf
+
 # Real IP is opt-in by presence: setting ANGIE_REAL_IP_FROM (the trusted proxy
 # list) turns the feature on, mirroring the GEOIP2_DB_COUNTRY convention. No
 # separate _ENABLED flag.

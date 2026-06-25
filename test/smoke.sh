@@ -37,6 +37,25 @@ assert_contains() { # haystack needle label
   *) fail "$3 (missing '$2')" ;;
   esac
 }
+# Negative of assert_contains: fail if the needle IS present. Lists one or more
+# active dirs inside $cid and asserts the combined output lacks needle -- used to
+# confirm a snippet/module symlink is gone after a declarative reset.
+assert_disabled() { # cid label needle activedir...
+  local cid=$1 label=$2 needle=$3
+  shift 3
+  local listing
+  listing=$(docker exec "$cid" sh -c "ls $* 2>/dev/null" || true)
+  case "$listing" in
+  *"$needle"*) fail "$label (still enabled: '$needle')" ;;
+  *) pass "$label" ;;
+  esac
+}
+# Symlink an available snippet/module into its active dir inside $cid, simulating
+# an orphan a prior run left active. `src` is relative to the active dir (the
+# `../*-available.d/...` form angie-ctl uses); `dst` is the active path.
+link_active() { # cid src dst
+  docker exec "$1" ln -sf "$2" "$3"
+}
 
 # Start a detached container; echoes the container id and registers it for cleanup.
 start() { # extra docker run args...
@@ -269,12 +288,17 @@ docker rm -f "$cid" >/dev/null
 # A geoip2 log format left active by a prior run (persistent /etc/angie volume)
 # references $geoip2_country_code, which only exists with geoip2 up. angie
 # validates every log_format, so the orphan breaks `angie -t` for the whole
-# config. 40-log must clear it before selecting a log. Inject the orphan, re-run
-# 40-log.sh (simulating the next start), and confirm the config is valid again.
+# config. 40-log must clear it before selecting a log. Inject the real orphan
+# `enable_log` would leave -- the PAIR (030 format + 040 access_log) -- re-run
+# 40-log.sh (simulating the next start), and confirm the config is valid again
+# and BOTH symlinks are gone (a dangling 040 access_log on a removed format
+# would itself break startup).
 cid=$(start)
 wait_healthy "$cid" || fail "orphan-heal container healthy"
-docker exec "$cid" ln -sf ../http-conf-available.d/030-log-format-logfmt-with-geoip2.conf \
+link_active "$cid" ../http-conf-available.d/030-log-format-logfmt-with-geoip2.conf \
   /etc/angie/http-conf.d/030-log-format-logfmt-with-geoip2.conf
+link_active "$cid" ../http-conf-available.d/040-log-logfmt-with-geoip2.conf \
+  /etc/angie/http-conf.d/040-log-logfmt-with-geoip2.conf
 if docker exec "$cid" angie -t >/dev/null 2>&1; then
   fail "sanity: orphaned geoip2 log format should break angie -t"
 else
@@ -286,11 +310,89 @@ if docker exec "$cid" angie -t >/dev/null 2>&1; then
 else
   fail "40-log.sh did not heal the geoip2 orphan"
 fi
-left=$(docker exec "$cid" ls /etc/angie/http-conf.d/ 2>/dev/null || true)
-case "$left" in
-*030-log-format-logfmt-with-geoip2.conf*) fail "geoip2 orphan still enabled after 40-log.sh" ;;
-*) pass "geoip2 orphan symlink removed" ;;
-esac
+assert_disabled "$cid" "geoip2 log-format + access_log orphans removed" \
+  logfmt-with-geoip2.conf /etc/angie/http-conf.d/
+docker rm -f "$cid" >/dev/null
+
+# --- 4l. geoip2 map/module orphan self-heals when geoip2 is off -------------
+# Sibling of 4k: the geoip2 map (025) + load_module left active by a prior run
+# also survive on a persistent volume. The map bakes in the DB path and angie
+# opens the mmdb at config load, so an orphaned map pointing at a now-gone DB
+# fails `angie -t`. 50-geoip2.sh must clear map+module before its early exits.
+cid=$(start)
+wait_healthy "$cid" || fail "geoip2 map orphan-heal container healthy"
+docker exec "$cid" sh -c '
+  printf "geoip2 /nonexistent/GeoLite2-Country.mmdb {\n  auto_reload 1h;\n  \$geoip2_country_code default=ZZ source=\$remote_addr country iso_code;\n}\n" \
+    > /etc/angie/http-conf-available.d/025-geoip2.conf
+  ln -sf ../http-conf-available.d/025-geoip2.conf /etc/angie/http-conf.d/025-geoip2.conf
+  ln -sf ../modules-available.d/http_geoip2.conf /etc/angie/modules.d/http_geoip2.conf
+'
+if docker exec "$cid" angie -t >/dev/null 2>&1; then
+  fail "sanity: orphaned geoip2 map (gone DB) should break angie -t"
+else
+  pass "sanity: orphaned geoip2 map breaks angie -t"
+fi
+# No GEOIP2_DB_COUNTRY in env: 50-geoip2.sh must clear the orphan, then early-exit.
+docker exec "$cid" sh /docker-entrypoint.d/50-geoip2.sh >/dev/null 2>&1 || true
+if docker exec "$cid" angie -t >/dev/null 2>&1; then
+  pass "50-geoip2.sh disables the map/module orphan, angie -t valid again"
+else
+  fail "50-geoip2.sh did not heal the geoip2 map orphan"
+fi
+assert_disabled "$cid" "geoip2 map orphan removed" \
+  025-geoip2.conf /etc/angie/http-conf.d/
+assert_disabled "$cid" "geoip2 module orphan removed" \
+  http_geoip2.conf /etc/angie/modules.d/
+docker rm -f "$cid" >/dev/null
+
+# --- 4m. real-ip orphan is cleared when ANGIE_REAL_IP_FROM is removed --------
+# A 015-real-ip.conf left active by a prior run keeps trusting a stale
+# set_real_ip_from list on a persistent volume. Core realip directives never
+# break `angie -t`, so assert on the symlink, not on the config test: starting
+# without ANGIE_REAL_IP_FROM must leave the orphan disabled.
+cid=$(start)
+wait_healthy "$cid" || fail "real-ip orphan-heal container healthy"
+docker exec "$cid" sh -c '
+  printf "real_ip_header X-Forwarded-For;\nset_real_ip_from 203.0.113.0/24;\n" \
+    > /etc/angie/http-conf-available.d/015-real-ip.conf
+  ln -sf ../http-conf-available.d/015-real-ip.conf /etc/angie/http-conf.d/015-real-ip.conf
+'
+docker exec "$cid" sh /docker-entrypoint.d/35-real-ip.sh >/dev/null 2>&1 || true
+assert_disabled "$cid" "35-real-ip.sh clears the stale trusted-proxy orphan" \
+  015-real-ip.conf /etc/angie/http-conf.d/
+docker rm -f "$cid" >/dev/null
+
+# --- 4n. declarative reset: brotli config + module orphan cleared when off ---
+# Representative of the conf+module reset path. A brotli config + module left
+# active by a prior run must be cleared when ANGIE_BROTLI_* is no longer set, so
+# the feature does not stay stuck on across restarts. Inject the pair, run
+# 40-brotli.sh with no env, confirm both symlinks are gone and angie -t valid.
+cid=$(start)
+wait_healthy "$cid" || fail "brotli reset container healthy"
+link_active "$cid" ../http-conf-available.d/020-brotli.conf \
+  /etc/angie/http-conf.d/020-brotli.conf
+link_active "$cid" ../modules-available.d/http_brotli_filter.conf \
+  /etc/angie/modules.d/http_brotli_filter.conf
+docker exec "$cid" sh /docker-entrypoint.d/40-brotli.sh >/dev/null 2>&1 || true
+assert_disabled "$cid" "40-brotli.sh resets the brotli config orphan" \
+  020-brotli.conf /etc/angie/http-conf.d/
+assert_disabled "$cid" "40-brotli.sh resets the brotli module orphan" \
+  http_brotli_filter.conf /etc/angie/modules.d/
+if docker exec "$cid" angie -t >/dev/null 2>&1; then
+  pass "config valid after brotli reset"
+else
+  fail "config invalid after brotli reset"
+fi
+docker rm -f "$cid" >/dev/null
+
+# --- 4o. declarative reset: brotli stays on when its variable is set ---------
+# The reset must not break the happy path: with ANGIE_BROTLI_ENABLED set,
+# 40-brotli.sh re-enables config + module after the initial reset.
+cid=$(start -e ANGIE_BROTLI_ENABLED=1)
+wait_healthy "$cid" || fail "brotli enabled container healthy"
+en=$(docker exec "$cid" sh -c 'ls /etc/angie/http-conf.d/ /etc/angie/modules.d/ 2>/dev/null' || true)
+assert_contains "$en" 020-brotli.conf \
+  "40-brotli.sh re-enables brotli when ANGIE_BROTLI_ENABLED is set"
 docker rm -f "$cid" >/dev/null
 
 # --- 5. Entrypoint fail-fast: a failing config script stops the container ---

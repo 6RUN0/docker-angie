@@ -7,6 +7,14 @@ skip_toggle_unless_writable
 : "${ANGIE_ZSTD_ENABLED:=no}"
 : "${ANGIE_ZSTD_STATIC_ENABLED:=no}"
 
+# Reset zstd before re-enabling per env, so disabling it (clearing the
+# ANGIE_ZSTD_* variables) actually takes effect on a persistent /etc/angie
+# volume instead of leaving an orphaned `zstd on;` whose module might no longer
+# be loaded. Disable the config (consumer of the module directives) before the
+# module itself.
+reset_httpconf 021-zstd_static.conf 020-zstd.conf
+reset_module http_zstd_static.conf http_zstd_filter.conf
+
 enable_zstd() {
   angie-ctl mod en "http_zstd_filter.conf" &&
     ngx_info "Zstd module is enabled"

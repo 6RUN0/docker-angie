@@ -10,6 +10,18 @@ itself. The build number increments when the same Angie version is repackaged
 
 ## [Unreleased]
 
+### Changed
+
+- Feature toggles are now declarative. Every entrypoint toggle resets the
+  snippets and modules it manages at the start of each run (via new
+  `reset_httpconf` / `reset_module` helpers) and re-enables only what the current
+  `ANGIE_*` environment requests. Removing a variable now disables its feature on
+  the next start, instead of an enable-only toggle leaving it stuck on across
+  restarts on a persistent `/etc/angie` volume. Layer custom configuration
+  through `/etc/angie/custom`, not by hand-enabling shipped snippets — those are
+  reset on the next start. `worker_processes` auto-tuning is the one exception
+  (it rewrites `angie.conf` in place behind a one-time sentinel).
+
 ### Fixed
 
 - A geoip2 log format left active by a prior run no longer breaks startup when
@@ -17,6 +29,15 @@ itself. The build number increments when the same Angie version is repackaged
   snippets before selecting a log (`50-geoip2.sh` re-enables them when geoip2 is
   active), so `angie -t` no longer fails with `unknown "geoip2_country_code"
   variable` on a persistent `/etc/angie` volume.
+- A geoip2 map (`025-geoip2.conf`) and its module left active by a prior run no
+  longer break startup when geoip2 is disabled. `50-geoip2.sh` now clears both
+  before its early exits and re-enables them only when geoip2 genuinely comes
+  up, so a stale `geoip2 <path>` pointing at a removed database no longer fails
+  `angie -t` with `MMDB_open(...) failed` on a persistent `/etc/angie` volume.
+- A real-ip config (`015-real-ip.conf`) left active by a prior run no longer
+  keeps trusting a stale `set_real_ip_from` list after `ANGIE_REAL_IP_FROM` is
+  removed. `35-real-ip.sh` now clears the orphan before its early exit, closing
+  a `$remote_addr` spoofing window on a persistent `/etc/angie` volume.
 
 ## [1.11.8-build2] - 2026-06-23
 

@@ -4,6 +4,17 @@
 
 skip_toggle_unless_writable
 
+# Reset geoip2 state before deciding whether it is enabled this start. On a
+# persistent /etc/angie volume the active symlinks survive container recreation,
+# and both early `exit 0` paths (GEOIP2_DB_COUNTRY unset, or its DB
+# unreadable) would otherwise leave an orphaned `geoip2 <path>` map pointing at a
+# possibly-gone database. angie's geoip2 module opens the mmdb at config load, so
+# a stale path fails `angie -t` for the whole config. Re-enabled when
+# geoip2 genuinely comes up. The map consumes $geoip2_country_code, so disable it
+# before its module.
+reset_httpconf 025-geoip2.conf
+reset_module http_geoip2.conf
+
 if [ -z "${GEOIP2_DB_COUNTRY:-}" ]; then
   exit 0
 fi

@@ -210,13 +210,34 @@ geoip2 log format enabled on a previous run can outlive geoip2 on a persistent
 `/etc/angie` volume. angie validates the variables of every declared
 `log_format`, so the orphaned `*-with-geoip2` format fails `angie -t` for the
 whole config even when unused. `40-log.sh` clears these snippets at startup, so
-recreating the container heals it; to fix a running container, disable the
-orphan (the access log before its format):
+recreating the container heals it; to fix a running container, disable both the
+access log and its format together (a single `angie-ctl dis` call removes both
+symlinks, then validates once):
 
 ```sh
-docker exec <container> angie-ctl httpconf dis 040-log-logfmt-with-geoip2.conf
-docker exec <container> angie-ctl httpconf dis 030-log-format-logfmt-with-geoip2.conf
+docker exec <container> angie-ctl httpconf dis \
+  040-log-logfmt-with-geoip2.conf 030-log-format-logfmt-with-geoip2.conf
 ```
+
+The geoip2 map itself can orphan the same way — a stale `geoip2 <path>` left by
+a prior run fails `angie -t` with `MMDB_open(...) failed` once the database is
+gone. The entrypoint clears the map and its module at startup, so recreating the
+container heals this too.
+
+**General rule.** Feature toggles are declarative: the entrypoint resets the
+snippets and modules it manages at every start, then re-enables only what the
+current `ANGIE_*` environment asks for. Removing a variable disables its feature
+on the next start (restart or recreate the container so the entrypoint re-runs),
+even on a persistent `/etc/angie` volume. Layer your own configuration through
+the `/etc/angie/custom` volume rather than enabling shipped snippets by hand —
+a hand-enabled snippet is disabled again on the next start. For example,
+disabling the default access log (`ANGIE_LOG_LOGFMT=no`) without selecting
+another format leaves the config with no global `access_log` at all — that is
+the declarative result, not a fault (`angie -t` still passes). The one exception
+is `worker_processes` auto-tuning (`ANGIE_ENTRYPOINT_WORKER_PROCESSES_AUTOTUNE`),
+which rewrites `angie.conf` in place behind a one-time sentinel: a value tuned on
+a prior run stays until you reset the file or recreate the volume (this is a
+benign performance value and never fails `angie -t`).
 
 ---
 
