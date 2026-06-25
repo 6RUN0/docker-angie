@@ -114,3 +114,11 @@ rewrites `%%GEOIP2_DB_COUNTRY%%` inside `025-geoip2.conf` before enabling it.
   configurable mirror. Keep the alpine and debian Dockerfiles in sync when
   changing the installed module set or the angie-ctl pin.
 - Branching: work lands on `develop`; `main` is the default/PR target.
+
+## Releasing
+
+Cutting a new image release (build-number bump or Angie version bump) follows
+[`docs/release-checklist.md`](docs/release-checklist.md). Key point: the current
+tag is hard-coded in `README*`, `CHANGELOG*`, and `docs/dockerhub-overview.md`
+examples, so a bump must actualize those (and re-check `CLAUDE.md`), not only the
+Dockerfile `ARG ANGIE_VERSION` pins.
