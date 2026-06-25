@@ -96,6 +96,21 @@ Key toggles (full table of 20+ variables in
 | `ANGIE_SECURITY_HEADERS_ENABLED` | `no` | Emit a conservative baseline of security response headers. |
 | `ANGIE_ENTRYPOINT_WORKER_PROCESSES_AUTOTUNE` | unset | Tune `worker_processes` to the CPU count at start. |
 
+Access-log variables come in two families whose names are easy to confuse — the
+difference is **register** vs. **activate**:
+
+- `ANGIE_LOG_FORMAT_*` (e.g. `ANGIE_LOG_FORMAT_LOGFMT_GEOIP2`) only **register** a
+  `log_format` definition so it can be referenced. They do **not** change the
+  active access log and do **not** disable any other format.
+- `ANGIE_LOG_*` (e.g. `ANGIE_LOG_LOGFMT_GEOIP2`) **register and activate** the
+  format as the access log. Activating one resets the others, so exactly one
+  access log stays active — this is what overrides the default `logfmt`. Enabling
+  two would log every request twice.
+
+The `*_GEOIP2` variants additionally require GeoIP2 to be up (`GEOIP2_DB_COUNTRY`
+set and readable). Full table:
+[docs/configuration.md](docs/configuration.md#log-formats).
+
 Mount custom configuration at the **`/etc/angie/custom`** volume.
 
 ## Data and state
