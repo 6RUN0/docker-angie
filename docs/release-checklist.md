@@ -77,10 +77,15 @@ allowed here are exactly those new-build URLs. Anything else is a real broken li
 
 ## 6. Tag and publish
 
-- Land the changes on `develop`, then merge to `main` (the PR target).
-- Tag the merge commit on `main` `v<angie>-build<N>` and push the tag. The format
-  is **validated** by CI (`vX.Y.Z-buildN`) — a malformed tag fails the release,
-  it does not merely break CHANGELOG links.
+- Land all the changes (code + this build bump) on `develop` and push **only
+  `develop`** first — do not tag yet.
+- Wait for the `develop` CI to go green. The tag triggers the publish, so it must
+  not be pushed against an untested commit.
+- Once CI is green, tag the `develop` HEAD `v<angie>-build<N>` and push the tag.
+  The format is **validated** by CI (`vX.Y.Z-buildN`) — a malformed tag fails the
+  release, it does not merely break CHANGELOG links.
+- Only **after** the tagged release has published, merge `develop` into `main`
+  (the PR target) so `main` tracks the released state.
 - Pushing the tag triggers `.github/workflows/release.yml`, which:
   - builds and pushes all four images (alpine, debian + their unprivileged
     variants) to GHCR and Docker Hub (`6run0/angie`), publishing the immutable
