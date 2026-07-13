@@ -14,7 +14,7 @@ ARG ANGIE_SIGNING_KEY_URL="https://angie.software/keys/angie-signing.rsa"
 ARG ANGIE_SIGNING_KEY="/etc/apk/keys/angie-signing.rsa"
 # Angie version pinned into the image. Bump via the upstream-check workflow PR;
 # release tags (vX.Y.Z-buildN) must match this value (enforced in release.yml).
-ARG ANGIE_VERSION=1.11.8
+ARG ANGIE_VERSION=1.12.0
 # Packaging version (the image tag minus the variant suffix) and source revision,
 # stamped into the OCI labels below. Overridden by release.yml; a dev marker for
 # local/CI builds.
@@ -22,7 +22,7 @@ ARG IMAGE_VERSION=dev
 ARG VCS_REF=""
 # Helper script for angie control
 ARG ANGIE_CTL_REPO="https://github.com/6RUN0/angie-ctl.git"
-ARG ANGIE_CTL_COMMIT="a69c1d102ec99a893a11f08015ea150c1e287482"
+ARG ANGIE_CTL_COMMIT="4cc390317462da580d3e63907c68f775de879048"
 ARG ANGIE_CTL="/usr/local/bin/angie-ctl"
 
 # The angie web server https://angie.software
