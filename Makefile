@@ -49,9 +49,8 @@ help: ## Show this help
 lint: lint-shell lint-docker lint-config lint-ci lint-docs ## Run all linters
 
 .PHONY: lint-shell
-lint-shell: ## shellcheck entrypoint (POSIX sh) and test scripts
-	shellcheck -s sh $(ENTRYPOINT_SCRIPTS)
-	shellcheck -s bash test/*.sh
+lint-shell: ## shellcheck entrypoint and test scripts (all POSIX sh)
+	shellcheck -s sh $(ENTRYPOINT_SCRIPTS) test/*.sh
 
 .PHONY: lint-docker
 lint-docker: ## hadolint all Dockerfiles

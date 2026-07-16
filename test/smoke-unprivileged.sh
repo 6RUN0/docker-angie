@@ -1,24 +1,33 @@
-#!/usr/bin/env bash
+#!/bin/sh
 # Smoke tests for the rootless (unprivileged) image. Asserts it runs under
 # arbitrary `--user <uid>` with no added capabilities (serving on port 8080),
 # that the default user can apply ANGIE_* toggles at runtime, and that a foreign
-# uid safely skips toggling with a warning instead of crashing.
+# uid safely skips toggling with a warning instead of crashing. POSIX sh on
+# purpose: the suite must run on hosts without bash (alpine CI runners).
 #
 # Usage: IMAGE=angie-alpine-unprivileged ./test/smoke-unprivileged.sh
-set -euo pipefail
+set -eu
+# pipefail is not POSIX (before POSIX.1-2024); busybox ash and dash >= 0.5.12
+# support it, older dash does not -- hence the subshell probe instead of an
+# unconditional set. The assertions do not depend on it.
+# shellcheck disable=SC3040 # probed in a subshell first; harmless when absent
+if (set -o pipefail) 2>/dev/null; then set -o pipefail; fi
 
 IMAGE="${IMAGE:?set IMAGE=<image:tag>}"
 PORT=8080
 
 tests=0
 fails=0
-cids=()
+
+# Containers are swept by label, not by an accumulated id list: start() runs
+# inside command substitutions, so an id appended to a variable there dies with
+# the subshell -- an aborted run would leak its containers.
+SMOKE_RUN_LABEL="angie-smoke-run=$$"
 
 cleanup() {
-  local c
-  for c in "${cids[@]:-}"; do
-    if [ -n "$c" ]; then docker rm -f "$c" >/dev/null 2>&1 || true; fi
-  done
+  # No `xargs -r` (a GNU/busybox extension): with an empty id list docker rm
+  # errors on missing arguments, which the redirect + `|| true` absorb.
+  docker ps -aq --filter "label=$SMOKE_RUN_LABEL" | xargs docker rm -f >/dev/null 2>&1 || true
 }
 trap cleanup EXIT
 
@@ -33,16 +42,13 @@ fail() {
 }
 
 start() { # extra docker run args...
-  local cid
-  cid=$(docker run -d "$@" "$IMAGE")
-  cids+=("$cid")
-  printf '%s' "$cid"
+  docker run -d --label "$SMOKE_RUN_LABEL" "$@" "$IMAGE"
 }
 
 wait_healthy() { # cid
-  local cid=$1 _
+  __wh_cid=$1
   for _ in $(seq 1 40); do
-    if docker exec "$cid" wget -q -O /dev/null "http://127.0.0.1:$PORT/healthz" 2>/dev/null; then
+    if docker exec "$__wh_cid" wget -q -O /dev/null "http://127.0.0.1:$PORT/healthz" 2>/dev/null; then
       return 0
     fi
     sleep 0.5
@@ -115,7 +121,7 @@ else
 fi
 cip=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' "$cid" 2>/dev/null || true)
 if [ -n "$cip" ]; then
-  if docker run --rm "$IMAGE" wget -q -O /dev/null "http://$cip:$PORT/healthz" 2>/dev/null; then
+  if docker run --rm --label "$SMOKE_RUN_LABEL" "$IMAGE" wget -q -O /dev/null "http://$cip:$PORT/healthz" 2>/dev/null; then
     fail "/healthz reachable from another container ($cip) — must be denied"
   else
     pass "/healthz denied from external client ($cip)"
