@@ -94,6 +94,8 @@ docker run -d -p 8080:8080 6run0/angie:alpine-unprivileged
 | `ANGIE_MAP_WEBSOCKET_ENABLED` | `no` | Включить карту переменных для апгрейда WebSocket. |
 | `ANGIE_REAL_IP_FROM` | unset | CIDR доверенных прокси; восстанавливает реальный IP клиента за прокси/балансировщиком. |
 | `ANGIE_SECURITY_HEADERS_ENABLED` | `no` | Отдавать консервативный базовый набор security-заголовков. |
+| `ANGIE_STATUS_API_ENABLED` | `no` | Отдавать JSON статус-API и Prometheus `/metrics` на `:8181`. |
+| `ANGIE_ERROR_LOG_JSON_ENABLED` | `no` | Писать лог ошибок структурированным JSON (объект на строку). |
 | `ANGIE_ENTRYPOINT_WORKER_PROCESSES_AUTOTUNE` | unset | Настроить `worker_processes` под число CPU при старте. |
 
 Переменные access-лога делятся на два семейства, которые легко спутать по

@@ -83,6 +83,12 @@ more than one causes each request to be logged multiple times.
 | `ANGIE_LOG_FORMAT_LOGFMT_GEOIP2` | `no` | Requires GeoIP2 active (`GEOIP2_DB_COUNTRY` set and readable). Register the `logfmt-with-geoip2` format (adds `country` field) without activating it. |
 | `ANGIE_LOG_LOGFMT_GEOIP2` | `no` | Requires GeoIP2 active (`GEOIP2_DB_COUNTRY` set and readable). Register and use the `logfmt-with-geoip2` format for `/dev/stdout`. |
 
+### Error log
+
+| Variable | Default | Description |
+|---|---|---|
+| `ANGIE_ERROR_LOG_JSON_ENABLED` | `no` | Switch the error log (`/dev/stderr`) to Angie's structured JSON format: one object per line with `time`, `level`, `pid`, `message`, plus request/upstream context and `tags` when applicable. The field set is fixed by Angie — unlike access-log formats it is not templatable (only `error_log`'s `filter=`/`rate=` parameters and `error_log_user_tag` customize behavior; set those via the custom volume). The toggle rewrites the shipped `error_log` line in `angie.conf` in place and reverts it when unset; it leaves a user-customized `error_log` line alone and is a no-op on a read-only filesystem. |
+
 ### WebSocket
 
 | Variable | Default | Description |
@@ -124,6 +130,29 @@ package needed). Enabled by presence: setting `ANGIE_REAL_IP_FROM` turns it on.
 > `location` that defines its own `add_header` replaces the inherited set,
 > dropping these headers there. If a custom vhost adds headers, repeat the
 > baseline ones too.
+
+### Status API and Prometheus metrics
+
+Expose Angie's built-in monitoring API on a dedicated listener: `/status/`
+serves the JSON statistics tree (server info, connections, and -- once you
+declare `status_zone`s or upstream `zone`s in your vhosts -- per-zone and
+per-upstream metrics, including the certificate and response-time sections
+added in Angie 1.12.0), and `/metrics` serves the same data rendered with the
+stock `all` Prometheus template. Any other URI on this listener returns `444`.
+
+The port is **not** in the image `EXPOSE` list and is never published by
+default: with the default `0.0.0.0` host the listener is reachable from the
+container's Docker network (e.g. a Prometheus scraper in a neighbor
+container), and from the host only after an explicit publish such as
+`-p 127.0.0.1:8181:8181`. The open-source `api` endpoint is read-only
+(configuration writes are an Angie PRO feature); restrict access further with
+`allow`/`deny` via the custom volume if your network model needs it.
+
+| Variable | Default | Description |
+|---|---|---|
+| `ANGIE_STATUS_API_ENABLED` | `no` | Enable the status listener with `/status/` (JSON API) and `/metrics` (Prometheus). |
+| `ANGIE_STATUS_API_HOST` | `0.0.0.0` | Listen address. Restricted to the characters `0-9 a-f A-F : . [ ] *` (IPv4, bracketed IPv6 such as `[::]`, or `*`); hostnames and other characters are rejected to prevent config injection. |
+| `ANGIE_STATUS_API_PORT` | `8181` | Listen port, digits only, `1-65535`. Keep it >= 1024 so the same value works in the unprivileged image. |
 
 ### Filesystem
 

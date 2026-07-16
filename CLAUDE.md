@@ -79,8 +79,8 @@ into the active `.d/` dir.
   `enable_log_format`/`enable_log` helpers. Logging goes to fd 3, which maps to
   stderr or `/dev/null` when quiet.
 - `rootfs/docker-entrypoint.d/NN-*.sh` — one feature toggle per file, numbered to
-  control order (30 tune, 35 real-ip, 40 features, 45 security headers,
-  50 geoip2, 60 websocket, 90 permission fixups). Each reads its `ANGIE_*` env
+  control order (30 tune, 31 error-log-json, 35 real-ip, 40 features,
+  45 security headers, 50 geoip2, 60 websocket, 90 permission fixups). Each reads its `ANGIE_*` env
   var and calls `ngx_ctl` (the `angie-ctl` wrapper from
   `docker-entrypoint-common.sh`) to enable the corresponding snippet. angie-ctl
   performs no per-call config test; validation is deferred to the entrypoint's
@@ -100,9 +100,11 @@ into the active `.d/` dir.
   `40-brotli.sh`, `40-gzip.sh`).
 
 Scripts that templatize config use `sed` placeholder substitution: `50-geoip2.sh`
-rewrites `%%GEOIP2_DB_COUNTRY%%` inside `025-geoip2.conf` before enabling it.
-`30-tune-worker-processes.sh` is the outlier — it rewrites `worker_processes` in
-`angie.conf` in place (cgroup v1/v2 CPU detection) and no-ops on a read-only FS.
+rewrites `%%GEOIP2_DB_COUNTRY%%` inside `025-geoip2.conf`, and `40-status-api.sh`
+renders `070-status-api.conf` from its `.template`, before enabling them.
+Two outliers rewrite `angie.conf` in place instead (both no-op on a read-only
+FS): `30-tune-worker-processes.sh` (`worker_processes`, cgroup v1/v2 CPU
+detection) and `31-error-log-json.sh` (the `error_log` line, toggled both ways).
 
 ## Angie config layout (`rootfs/etc/angie/`)
 

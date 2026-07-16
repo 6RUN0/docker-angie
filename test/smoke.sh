@@ -476,6 +476,110 @@ assert_contains "$en" 020-brotli.conf \
   "40-brotli.sh re-enables brotli when ANGIE_BROTLI_ENABLED is set"
 docker rm -f "$cid" >/dev/null
 
+# --- 4q. Status API: /status/ JSON + /metrics Prometheus on the wire ---------
+# The listener binds ANGIE_STATUS_API_HOST:PORT (default 0.0.0.0:8181) so a
+# scraper in a NEIGHBOR container can reach it -- assert exactly that, plus the
+# in-container view, the off-by-default posture, and 444 for non-API URIs.
+cid=$(start)
+wait_healthy "$cid" || fail "status-api default-off container healthy"
+if docker exec "$cid" wget -q -O /dev/null http://127.0.0.1:8181/status/ 2>/dev/null; then
+  fail "status API is off by default (8181 unexpectedly open)"
+else
+  pass "status API is off by default (8181 closed)"
+fi
+docker rm -f "$cid" >/dev/null
+
+cid=$(start -e ANGIE_STATUS_API_ENABLED=1)
+wait_healthy "$cid" || fail "status-api container healthy"
+status_json=$(docker exec "$cid" wget -q -O - http://127.0.0.1:8181/status/ 2>/dev/null || true)
+assert_contains "$status_json" '"angie"' "status API serves /status/ JSON"
+assert_contains "$status_json" '"connections"' "/status/ JSON includes the connections section"
+if docker exec "$cid" wget -q -O /dev/null http://127.0.0.1:8181/other 2>/dev/null; then
+  fail "non-API URI on the status listener is closed (expected 444)"
+else
+  pass "non-API URI on the status listener is closed (444)"
+fi
+cip=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' "$cid" 2>/dev/null || true)
+if [ -n "$cip" ]; then
+  metrics=$(docker run --rm --label "$SMOKE_RUN_LABEL" "$IMAGE" wget -q -O - "http://$cip:8181/metrics" 2>/dev/null || true)
+  assert_contains "$metrics" "angie_connections_accepted" \
+    "Prometheus /metrics reachable from the Docker network"
+else
+  fail "could not determine container IP to scrape /metrics externally"
+fi
+# Declarative reset: re-running the toggle with the variable off must disable
+# the listener snippet (persistent /etc/angie volume semantics).
+docker exec -e ANGIE_STATUS_API_ENABLED=no "$cid" sh /docker-entrypoint.d/40-status-api.sh >/dev/null 2>&1 || true
+assert_disabled "$cid" "status API snippet reset when disabled" \
+  070-status-api.conf /etc/angie/http-conf.d/
+docker rm -f "$cid" >/dev/null
+
+# --- 4q'. Status API on a custom host:port -----------------------------------
+cid=$(start -e ANGIE_STATUS_API_ENABLED=1 -e ANGIE_STATUS_API_HOST=127.0.0.1 -e ANGIE_STATUS_API_PORT=9191)
+wait_healthy "$cid" || fail "status-api custom-port container healthy"
+status_json=$(docker exec "$cid" wget -q -O - http://127.0.0.1:9191/status/ 2>/dev/null || true)
+assert_contains "$status_json" '"angie"' "ANGIE_STATUS_API_HOST/PORT move the status listener"
+docker rm -f "$cid" >/dev/null
+
+# --- 4q''. Status API charset guard: an unsafe port aborts startup -----------
+# Mirrors the GeoIP2/real-ip injection guards: host and port are substituted
+# into a `listen` directive, so an out-of-charset value must abort, not render.
+set +e
+timeout 30 docker run --rm --label "$SMOKE_RUN_LABEL" \
+  -e ANGIE_STATUS_API_ENABLED=1 -e 'ANGIE_STATUS_API_PORT=8181;evil' "$IMAGE" >/dev/null 2>&1
+rc=$?
+set -e
+if [ "$rc" -ne 0 ] && [ "$rc" -ne 124 ]; then
+  pass "status API rejects an unsafe ANGIE_STATUS_API_PORT (exit $rc)"
+else
+  fail "status API rejects an unsafe ANGIE_STATUS_API_PORT (got exit $rc; 124=timeout means it started anyway)"
+fi
+
+# --- 4r. error_log JSON toggle ------------------------------------------------
+# Default state is covered by the revert assertion below; enabled must rewrite
+# the angie.conf line AND deliver a real error event to docker logs as JSON.
+# Provoke one with a proxy_pass to a closed port: the error-level "connect()
+# failed" is deterministic and needs no external network.
+etmp=$(mktemp -d)
+tmpdirs="$tmpdirs $etmp"
+cat >"$etmp/vhost.conf" <<'CONF'
+server {
+  listen 8083;
+  location / {
+    proxy_pass http://127.0.0.1:9;
+  }
+}
+CONF
+chmod 755 "$etmp" # see section 9: workers must traverse the mounted dir
+cid=$(start -e ANGIE_ERROR_LOG_JSON_ENABLED=1 -v "$etmp:/etc/angie/custom/http.d:ro")
+wait_healthy "$cid" || fail "error-log-json container healthy"
+if docker exec "$cid" grep -qx 'error_log /dev/stderr format=json;' /etc/angie/angie.conf 2>/dev/null; then
+  pass "ANGIE_ERROR_LOG_JSON_ENABLED rewrites the error_log line"
+else
+  fail "ANGIE_ERROR_LOG_JSON_ENABLED rewrites the error_log line"
+fi
+docker exec "$cid" wget -q -O /dev/null http://127.0.0.1:8083/ 2>/dev/null || true
+# wait_logs reads the stdout stream only; error_log goes to stderr, so poll the
+# combined streams here with the same cadence.
+errline=""
+for _ in $(seq 1 20); do
+  errline=$(docker logs "$cid" 2>&1 | grep '"level":"error"' | tail -1 || true)
+  [ -n "$errline" ] && break
+  sleep 0.5
+done
+assert_contains "$errline" '"message":"connect() failed"' \
+  "error_log emits JSON entries to docker logs"
+# Declarative revert: running the toggle with the variable off must restore the
+# plain line (persistent /etc/angie volume semantics).
+docker exec -e ANGIE_ERROR_LOG_JSON_ENABLED=no "$cid" sh /docker-entrypoint.d/31-error-log-json.sh >/dev/null 2>&1 || true
+if docker exec "$cid" grep -qx 'error_log /dev/stderr;' /etc/angie/angie.conf 2>/dev/null; then
+  pass "error_log toggle reverts to the plain format"
+else
+  fail "error_log toggle reverts to the plain format"
+fi
+docker rm -f "$cid" >/dev/null
+rm -rf "$etmp"
+
 # --- 5. Entrypoint fail-fast: a failing config script stops the container ---
 tmp=$(mktemp -d)
 tmpdirs="$tmpdirs $tmp"

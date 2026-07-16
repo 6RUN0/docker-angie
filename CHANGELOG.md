@@ -10,6 +10,21 @@ itself. The build number increments when the same Angie version is repackaged
 
 ## [Unreleased]
 
+### Added
+
+- **Status API and Prometheus metrics** toggled with `ANGIE_STATUS_API_ENABLED`:
+  a dedicated listener (default `0.0.0.0:8181`, configurable via
+  `ANGIE_STATUS_API_HOST` / `ANGIE_STATUS_API_PORT` with charset validation)
+  serving Angie's read-only JSON statistics tree at `/status/` and the stock
+  `all` Prometheus template at `/metrics`. The port is not `EXPOSE`d and is
+  never published by default — reachable from the container's Docker network
+  until explicitly published.
+- **Structured JSON error log** toggled with `ANGIE_ERROR_LOG_JSON_ENABLED`:
+  switches the `error_log` in `angie.conf` to Angie 1.12.0's `format=json`
+  (one object per line with time, level, message, and request/upstream
+  context) and reverts it when unset. A customized `error_log` line is left
+  alone; a read-only config is a warned no-op.
+
 ## [1.12.0-build1] - 2026-07-16
 
 ### Changed

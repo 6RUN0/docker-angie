@@ -1,0 +1,34 @@
+# Status API and Prometheus metrics on a dedicated listener.
+# https://angie.software/angie/docs/configuration/modules/http/http_api/
+# https://angie.software/angie/docs/configuration/modules/http/http_prometheus/
+#
+# Rendered at container start by 40-status-api.sh from ANGIE_STATUS_API_HOST and
+# ANGIE_STATUS_API_PORT. The port is not in the image EXPOSE list and is never
+# published by default: the listener is reachable from the container's Docker
+# network only, until you publish it (e.g. `-p 127.0.0.1:8181:8181`). The OSS
+# api endpoint is read-only (configuration writes are an Angie PRO feature);
+# restrict access further with allow/deny via /etc/angie/custom if needed.
+
+# The `all` template with the common Angie metrics ships with the package.
+include prometheus_all.conf;
+
+server {
+  listen %%STATUS_API_HOST%%:%%STATUS_API_PORT%%;
+
+  # Metrics scrapes are high-frequency noise in an access log.
+  access_log off;
+
+  location /status/ {
+    api /status/;
+  }
+
+  location = /metrics {
+    prometheus all;
+  }
+
+  # Nothing else is served on this listener; close anything that is not the
+  # API, matching the default vhost's posture.
+  location / {
+    return 444;
+  }
+}

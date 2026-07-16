@@ -94,6 +94,8 @@ Key toggles (full table of 20+ variables in
 | `ANGIE_MAP_WEBSOCKET_ENABLED` | `no` | Enable the WebSocket upgrade variable map. |
 | `ANGIE_REAL_IP_FROM` | unset | Trusted proxy CIDRs; recovers the real client IP behind a proxy/LB. |
 | `ANGIE_SECURITY_HEADERS_ENABLED` | `no` | Emit a conservative baseline of security response headers. |
+| `ANGIE_STATUS_API_ENABLED` | `no` | Serve the JSON status API and Prometheus `/metrics` on `:8181`. |
+| `ANGIE_ERROR_LOG_JSON_ENABLED` | `no` | Write the error log as structured JSON (one object per line). |
 | `ANGIE_ENTRYPOINT_WORKER_PROCESSES_AUTOTUNE` | unset | Tune `worker_processes` to the CPU count at start. |
 
 Access-log variables come in two families whose names are easy to confuse — the
