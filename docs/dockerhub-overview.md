@@ -34,9 +34,9 @@ uid/gid `65532`.
 
 | Tag | Meaning |
 | --- | --- |
-| `1.11.8-build4-alpine`, `…-debian` | Immutable — exact Angie version + build. Pin this. |
-| `1.11.8-alpine` | Latest build of that Angie patch. |
-| `1.11-alpine` | Latest patch of that Angie minor line. |
+| `1.12.0-build1-alpine`, `…-debian` | Immutable — exact Angie version + build. Pin this. |
+| `1.12.0-alpine` | Latest build of that Angie patch. |
+| `1.12-alpine` | Latest patch of that Angie minor line. |
 | `alpine`, `debian` | Latest stable of that base. |
 | `latest` | Latest stable Alpine image. |
 | `*-unprivileged` | Rootless variant; suffixes every tag above except `latest`. |
@@ -85,9 +85,9 @@ uid/gid `65532`.
 
 | Тег | Значение |
 | --- | --- |
-| `1.11.8-build4-alpine`, `…-debian` | Неизменяемый — точная версия Angie + сборка. Фиксируйте его. |
-| `1.11.8-alpine` | Последняя сборка этого патча Angie. |
-| `1.11-alpine` | Последний патч этой минорной линии Angie. |
+| `1.12.0-build1-alpine`, `…-debian` | Неизменяемый — точная версия Angie + сборка. Фиксируйте его. |
+| `1.12.0-alpine` | Последняя сборка этого патча Angie. |
+| `1.12-alpine` | Последний патч этой минорной линии Angie. |
 | `alpine`, `debian` | Последний стабильный образ этой базы. |
 | `latest` | Последний стабильный образ Alpine. |
 | `*-unprivileged` | Rootless-вариант; суффикс ко всем тегам выше, кроме `latest`. |

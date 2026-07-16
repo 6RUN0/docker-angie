@@ -10,6 +10,18 @@
 
 ## [Не выпущено]
 
+## [1.12.0-build1] - 2026-07-16
+
+### Изменено
+
+- **Angie 1.12.0** — упакованный Angie обновлён с 1.11.8 до актуального
+  [релиза 1.12.0](https://github.com/webserver-llc/angie/releases/tag/Angie-1.12.0).
+- `angie-ctl` обновлён до актуального upstream, где удалён по-вызовный
+  `angie -t` вместе с флагом `--no-test`; обёртка entrypoint теперь вызывает
+  `angie-ctl` без флагов. Поведение не изменилось: по-вызовная проверка в этом
+  образе и так была отключена — entrypoint по-прежнему проверяет собранную
+  конфигурацию один раз единственным финальным `angie -t`.
+
 ## [1.11.8-build4] - 2026-06-26
 
 ### Исправлено
@@ -102,7 +114,8 @@
 - Публикация в GitHub Container Registry (`ghcr.io/6run0/docker-angie`) и
   Docker Hub (`6run0/angie`) с неизменяемыми тегами `…-build<N>` и плавающими тегами.
 
-[Не выпущено]: https://github.com/6RUN0/docker-angie/compare/v1.11.8-build4...HEAD
+[Не выпущено]: https://github.com/6RUN0/docker-angie/compare/v1.12.0-build1...HEAD
+[1.12.0-build1]: https://github.com/6RUN0/docker-angie/releases/tag/v1.12.0-build1
 [1.11.8-build4]: https://github.com/6RUN0/docker-angie/releases/tag/v1.11.8-build4
 [1.11.8-build3]: https://github.com/6RUN0/docker-angie/releases/tag/v1.11.8-build3
 [1.11.8-build2]: https://github.com/6RUN0/docker-angie/releases/tag/v1.11.8-build2

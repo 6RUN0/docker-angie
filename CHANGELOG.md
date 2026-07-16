@@ -10,6 +10,18 @@ itself. The build number increments when the same Angie version is repackaged
 
 ## [Unreleased]
 
+## [1.12.0-build1] - 2026-07-16
+
+### Changed
+
+- **Angie 1.12.0** — the packaged Angie is bumped from 1.11.8 to the current
+  [1.12.0 upstream release](https://github.com/webserver-llc/angie/releases/tag/Angie-1.12.0).
+- `angie-ctl` is bumped to the current upstream, which removed its per-call
+  `angie -t` together with the `--no-test` flag; the entrypoint wrapper now
+  invokes `angie-ctl` bare. No behavior change: per-call validation was already
+  disabled in this image — the entrypoint still validates the assembled config
+  once with its single final `angie -t`.
+
 ## [1.11.8-build4] - 2026-06-26
 
 ### Fixed
@@ -96,7 +108,8 @@ First public release: Angie 1.11.8 packaged for `linux/amd64` and `linux/arm64`.
 - Published to the GitHub Container Registry (`ghcr.io/6run0/docker-angie`) and
   Docker Hub (`6run0/angie`) with immutable `…-build<N>` and floating tags.
 
-[Unreleased]: https://github.com/6RUN0/docker-angie/compare/v1.11.8-build4...HEAD
+[Unreleased]: https://github.com/6RUN0/docker-angie/compare/v1.12.0-build1...HEAD
+[1.12.0-build1]: https://github.com/6RUN0/docker-angie/releases/tag/v1.12.0-build1
 [1.11.8-build4]: https://github.com/6RUN0/docker-angie/releases/tag/v1.11.8-build4
 [1.11.8-build3]: https://github.com/6RUN0/docker-angie/releases/tag/v1.11.8-build3
 [1.11.8-build2]: https://github.com/6RUN0/docker-angie/releases/tag/v1.11.8-build2
