@@ -22,10 +22,12 @@ docker build -t angie-debian -f debian/Dockerfile .
 docker compose up --build
 ```
 
-There is no test suite, linter config, or CI in the repo. To validate a change,
-build the image and exercise it with the relevant `ANGIE_*` env vars (see
-`README.md` for the full variable table). Shell scripts target POSIX `sh`
-(`#!/bin/sh`), so prefer `shellcheck -s sh` when checking them.
+Validation is wired through the Makefile: `make lint` (shellcheck, hadolint,
+gixy config lint, actionlint/zizmor, docs) and `make test` (builds all four
+images and runs `test/smoke.sh` / `test/smoke-unprivileged.sh` against them).
+CI (`.github/workflows/ci.yml`) runs the same lint + build + smoke pipeline on
+every push/PR. All shell scripts — entrypoint and tests alike — are POSIX `sh`
+(`#!/bin/sh`), checked with `shellcheck -s sh`.
 
 ## Architecture: the available.d / .d activation model
 
