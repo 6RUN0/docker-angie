@@ -142,12 +142,12 @@ label (`docker inspect`) and via `angie -v`.
 
 | Tag | Meaning |
 | --- | --- |
-| `1.12.0-build1-alpine`, `…-debian` | Immutable — exact Angie version and packaging. **Pin this.** |
+| `1.12.0-build2-alpine`, `…-debian` | Immutable — exact Angie version and packaging. **Pin this.** |
 | `1.12.0-alpine` | Latest build of that Angie patch. |
 | `1.12-alpine` | Latest patch of that Angie minor line. |
 | `alpine`, `debian` | Latest stable of that base. |
 | `latest` | Latest stable **Alpine** image. |
-| `*-unprivileged` | Rootless variant; suffixes every tag above except `latest` (e.g. `alpine-unprivileged`, `1.12.0-build1-alpine-unprivileged`). |
+| `*-unprivileged` | Rootless variant; suffixes every tag above except `latest` (e.g. `alpine-unprivileged`, `1.12.0-build2-alpine-unprivileged`). |
 
 Floating tags move only for stable Angie releases; a prerelease Angie version
 (e.g. `1.12.0-rc1`) publishes its immutable `…-build<N>` tag only.

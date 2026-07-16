@@ -10,6 +10,8 @@
 
 ## [Не выпущено]
 
+## [1.12.0-build2] - 2026-07-16
+
 ### Добавлено
 
 - **Статус-API и метрики Prometheus** по тумблеру `ANGIE_STATUS_API_ENABLED`:
@@ -142,7 +144,8 @@
 - Публикация в GitHub Container Registry (`ghcr.io/6run0/docker-angie`) и
   Docker Hub (`6run0/angie`) с неизменяемыми тегами `…-build<N>` и плавающими тегами.
 
-[Не выпущено]: https://github.com/6RUN0/docker-angie/compare/v1.12.0-build1...HEAD
+[Не выпущено]: https://github.com/6RUN0/docker-angie/compare/v1.12.0-build2...HEAD
+[1.12.0-build2]: https://github.com/6RUN0/docker-angie/releases/tag/v1.12.0-build2
 [1.12.0-build1]: https://github.com/6RUN0/docker-angie/releases/tag/v1.12.0-build1
 [1.11.8-build4]: https://github.com/6RUN0/docker-angie/releases/tag/v1.11.8-build4
 [1.11.8-build3]: https://github.com/6RUN0/docker-angie/releases/tag/v1.11.8-build3
