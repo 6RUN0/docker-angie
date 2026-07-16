@@ -36,6 +36,12 @@ itself. The build number increments when the same Angie version is repackaged
   invokes `angie-ctl` bare. No behavior change: per-call validation was already
   disabled in this image — the entrypoint still validates the assembled config
   once with its single final `angie -t`.
+- Heads-up from the Angie 1.12.0 bump itself: the `resolver` directive now
+  defaults to `conf` — DNS servers are read from `/etc/resolv.conf` (in a
+  container, Docker's embedded DNS) and re-read on change — so dynamic upstream
+  resolution works out of the box. Previously a missing `resolver` meant no
+  dynamic resolution at all; restore that with `resolver off;` via
+  `/etc/angie/custom`.
 
 ## [1.11.8-build4] - 2026-06-26
 

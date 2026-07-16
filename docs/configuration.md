@@ -229,6 +229,21 @@ response).
 
 ---
 
+## DNS resolution
+
+Since Angie 1.12.0 (image `1.12.0-build1`), the `resolver` directive defaults
+to `conf` in the `http` and `stream` modules: Angie reads its DNS servers from
+`/etc/resolv.conf` — inside a container that is Docker's embedded DNS — and
+re-reads the file whenever it changes. Dynamic name resolution (`proxy_pass`
+with variables, upstream `server ... resolve`) therefore works against Docker
+DNS out of the box, without a `resolver` line in your vhosts.
+
+Previously, omitting `resolver` disabled dynamic resolution entirely. To
+restore that behavior, set `resolver off;` (new in 1.12.0) via the custom
+volume.
+
+---
+
 ## Build arguments
 
 These arguments are passed to `docker build` with `--build-arg`. Refer to
