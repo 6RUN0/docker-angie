@@ -52,7 +52,9 @@ skip_toggle_unless_writable() {
 # Directory holding the shippable (disabled-by-default) http-conf snippets.
 HTTP_CONF_AVAILABLE_DIR="/etc/angie/http-conf-available.d"
 
-# Every entrypoint config mutation goes through angie-ctl with --no-test, so no
+# Every entrypoint config mutation goes through this wrapper. angie-ctl runs no
+# config test of its own (upstream removed the per-call `angie -t`, and with it
+# the --no-test flag -- passing the flag now fails as an unknown type), so no
 # single en/dis runs `angie -t`. The entrypoint validates the assembled config
 # once at the very end (see docker-entrypoint.sh). This removes an ordering
 # trap: angie validates the variables of EVERY declared log_format (and every
@@ -62,7 +64,7 @@ HTTP_CONF_AVAILABLE_DIR="/etc/angie/http-conf-available.d"
 # that intermediate test and abort startup at an unrelated, earlier script. With
 # validation deferred, only the final, fully-reset state is ever tested.
 ngx_ctl() {
-  angie-ctl --no-test "$@"
+  angie-ctl "$@"
 }
 
 # Feature toggles are declarative: each NN-*.sh resets the snippets/modules it

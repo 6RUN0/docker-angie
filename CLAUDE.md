@@ -64,23 +64,24 @@ into the active `.d/` dir.
   `angie`/`angie-debug`. It executes every executable `*.sh` in
   `/docker-entrypoint.d/` in `sort -V` order, then validates the fully-assembled
   config once with a final `angie -t` (fail-fast) before `exec "$@"`. The toggles
-  mutate config with `angie-ctl --no-test`, so this is the **only** config test
-  of the run — a transient inconsistency mid-toggling (e.g. an orphaned geoip2
+  mutate config with `angie-ctl`, which runs no config test of its own, so this
+  is the **only** config test of the run — a transient inconsistency
+  mid-toggling (e.g. an orphaned geoip2
   log format not yet reset when an earlier toggle enabled its snippet) is
   harmless; only the final state is tested. Non-executable or non-`.sh` files are
   skipped with a warning.
 - `rootfs/docker-entrypoint-common.sh` is **sourced** by every entrypoint script.
   It provides the `ngx_err/ngx_warning/ngx_notice/ngx_info` loggers (gated by
-  `ANGIE_ENTRYPOINT_QUIET_LOGS`), the `ngx_ctl` wrapper (`angie-ctl --no-test`),
+  `ANGIE_ENTRYPOINT_QUIET_LOGS`), the `ngx_ctl` wrapper around `angie-ctl`,
   the `reset_httpconf`/`reset_module` declarative-reset helpers, and the
   `enable_log_format`/`enable_log` helpers. Logging goes to fd 3, which maps to
   stderr or `/dev/null` when quiet.
 - `rootfs/docker-entrypoint.d/NN-*.sh` — one feature toggle per file, numbered to
   control order (30 tune, 35 real-ip, 40 features, 45 security headers,
   50 geoip2, 60 websocket, 90 permission fixups). Each reads its `ANGIE_*` env
-  var and calls `ngx_ctl` (the `angie-ctl --no-test` wrapper from
-  `docker-entrypoint-common.sh`) to enable the corresponding snippet — never bare
-  `angie-ctl`, so the per-call config test stays deferred to the entrypoint's
+  var and calls `ngx_ctl` (the `angie-ctl` wrapper from
+  `docker-entrypoint-common.sh`) to enable the corresponding snippet. angie-ctl
+  performs no per-call config test; validation is deferred to the entrypoint's
   final `angie -t`. The conventional toggle pattern is:
 
   ```sh
