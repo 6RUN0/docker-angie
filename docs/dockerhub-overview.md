@@ -34,8 +34,8 @@ uid/gid `65532`.
 
 | Tag | Meaning |
 | --- | --- |
-| `1.12.0-build2-alpine`, `…-debian` | Immutable — exact Angie version + build. Pin this. |
-| `1.12.0-alpine` | Latest build of that Angie patch. |
+| `1.12.1-build1-alpine`, `…-debian` | Immutable — exact Angie version + build. Pin this. |
+| `1.12.1-alpine` | Latest build of that Angie patch. |
 | `1.12-alpine` | Latest patch of that Angie minor line. |
 | `alpine`, `debian` | Latest stable of that base. |
 | `latest` | Latest stable Alpine image. |
@@ -85,8 +85,8 @@ uid/gid `65532`.
 
 | Тег | Значение |
 | --- | --- |
-| `1.12.0-build2-alpine`, `…-debian` | Неизменяемый — точная версия Angie + сборка. Фиксируйте его. |
-| `1.12.0-alpine` | Последняя сборка этого патча Angie. |
+| `1.12.1-build1-alpine`, `…-debian` | Неизменяемый — точная версия Angie + сборка. Фиксируйте его. |
+| `1.12.1-alpine` | Последняя сборка этого патча Angie. |
 | `1.12-alpine` | Последний патч этой минорной линии Angie. |
 | `alpine`, `debian` | Последний стабильный образ этой базы. |
 | `latest` | Последний стабильный образ Alpine. |

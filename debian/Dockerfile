@@ -26,7 +26,7 @@ ARG ANGIE_SIGNING_KEY="/usr/share/keyrings/angie-signing.gpg"
 ARG ANGIE_SOURCE_LIST="/etc/apt/sources.list.d/angie.sources"
 # Angie version pinned into the image. Bump via the upstream-check workflow PR;
 # release tags (vX.Y.Z-buildN) must match this value (enforced in release.yml).
-ARG ANGIE_VERSION=1.12.0
+ARG ANGIE_VERSION=1.12.1
 # Packaging version (the image tag minus the variant suffix) and source revision,
 # stamped into the OCI labels below. Overridden by release.yml; a dev marker for
 # local/CI builds.

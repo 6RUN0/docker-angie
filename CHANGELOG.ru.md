@@ -10,6 +10,21 @@
 
 ## [Не выпущено]
 
+## [1.12.1-build1] - 2026-07-18
+
+### Изменено
+
+- **Angie 1.12.1** — упакованный Angie обновлён с 1.12.0 до актуального
+  [релиза 1.12.1](https://github.com/webserver-llc/angie/releases/tag/Angie-1.12.1) —
+  security-релиза, исправляющего повреждение памяти/падение рабочего процесса
+  при использовании capture-переменных в `map`
+  ([CVE-2026-42533](https://nvd.nist.gov/vuln/detail/CVE-2026-42533),
+  [CVE-2026-60005](https://nvd.nist.gov/vuln/detail/CVE-2026-60005)) и SSI с
+  небуферизованным проксированием
+  ([CVE-2026-56434](https://nvd.nist.gov/vuln/detail/CVE-2026-56434)) — все
+  исправления портированы из nginx 1.31.3, — а также багфиксы модуля Metric и
+  директивы `least_time`.
+
 ## [1.12.0-build2] - 2026-07-16
 
 ### Добавлено
@@ -138,7 +153,8 @@
 - Публикация в GitHub Container Registry (`ghcr.io/6run0/docker-angie`) и
   Docker Hub (`6run0/angie`) с неизменяемыми тегами `…-build<N>` и плавающими тегами.
 
-[Не выпущено]: https://github.com/6RUN0/docker-angie/compare/v1.12.0-build2...HEAD
+[Не выпущено]: https://github.com/6RUN0/docker-angie/compare/v1.12.1-build1...HEAD
+[1.12.1-build1]: https://github.com/6RUN0/docker-angie/releases/tag/v1.12.1-build1
 [1.12.0-build2]: https://github.com/6RUN0/docker-angie/releases/tag/v1.12.0-build2
 [1.12.0-build1]: https://github.com/6RUN0/docker-angie/releases/tag/v1.12.0-build1
 [1.11.8-build4]: https://github.com/6RUN0/docker-angie/releases/tag/v1.11.8-build4
