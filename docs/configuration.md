@@ -286,4 +286,4 @@ with `docker inspect --format '{{json .Config.Labels}}' <image>`.
 
 ---
 
-[Русский](configuration.ru.md)
+Russian: [configuration.ru.md](configuration.ru.md).

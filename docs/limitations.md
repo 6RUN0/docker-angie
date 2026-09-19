@@ -73,7 +73,7 @@ See [security.md](security.md) for details.
 
 ---
 
-[English](limitations.md) | [Русский](limitations.ru.md)
-
 - [Configuration reference](configuration.md)
 - [Security hardening](security.md)
+
+Russian: [limitations.ru.md](limitations.ru.md).

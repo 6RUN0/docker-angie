@@ -142,5 +142,6 @@ defaults, omit the `healthcheck:` key entirely.
 
 ---
 
-- [English](compose.md) | [Russian](compose.ru.md)
 - [Usage and configuration](../README.md)
+
+Russian: [compose.ru.md](compose.ru.md).

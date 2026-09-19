@@ -398,8 +398,9 @@ See [configuration.md](configuration.md) for
 
 ---
 
-[Russian version](troubleshooting.ru.md) |
 [Configuration](configuration.md) |
 [Security](security.md) |
 [Usage](usage.md) |
 [Back to README](../README.md)
+
+Russian: [troubleshooting.ru.md](troubleshooting.ru.md).

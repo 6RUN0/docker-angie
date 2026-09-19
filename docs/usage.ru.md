@@ -57,13 +57,13 @@ docker run -d \
 `include` для `custom/` на каждом уровне, поэтому пользовательская конфигурация
 накладывается поверх встроенного дерева без редактирования системных файлов.
 
-Полная таблица переменных `ANGIE_*` приведена в `../README.md`.
+Полная таблица переменных `ANGIE_*` приведена в `../README.ru.md`.
 
 ### Rootless-вариант (unprivileged)
 
 Варианты с суффиксом `-unprivileged` не требуют никаких привилегий. Слушатель
 перенесён на порт 8080 (`CAP_NET_BIND_SERVICE` не нужен), pid-файл и временные
-пути relocated в `/tmp/angie`.
+пути перенесены в `/tmp/angie`.
 
 ```sh
 docker run -d \
@@ -80,7 +80,7 @@ UID по умолчанию внутри образа - `65532` (distroless "non
 docker run --user 1000:1000 -p 8080:8080 6run0/angie:alpine-unprivileged
 ```
 
-Если UID времени выполнения не является владельцем директорий активации,
+Если UID, под которым запущен контейнер, не владеет директориями активации,
 entrypoint-скрипты используют конфигурацию, запечённую на этапе сборки, и
 записывают предупреждение - контейнер всё равно запускается.
 
@@ -277,7 +277,7 @@ Angie пишет логи доступа и ошибок в `stdout`/`stderr`, �
 Формат логов доступа по умолчанию - `logfmt`. Полный список доступных
 форматов (`main`, `logfmt`, `logfmt-with-geoip2`, `extended`, `matomo`) и
 соответствующих переменных `ANGIE_LOG_*` приведён в
-[configuration.md](configuration.md).
+[configuration.ru.md](configuration.ru.md).
 
 Одновременно может быть активен только один формат логов доступа. Хелпер
 `enable_log` в `docker-entrypoint-common.sh` отключает всю группу
@@ -318,6 +318,7 @@ YYYY/MM/DD HH:MM:SS [err] 1: entrypoint:
 Проверить поведение можно так:
 
 ```sh
+# Создать падающий скрипт и примонтировать его
 printf '#!/bin/sh\nexit 7\n' > /tmp/99-fail.sh
 chmod +x /tmp/99-fail.sh
 docker run --rm \
@@ -328,7 +329,8 @@ docker run --rm \
 
 ---
 
-[English version](usage.md) |
-[Конфигурация](configuration.md) |
-[Compose](compose.md) |
-[Назад к README](../README.md)
+[Конфигурация](configuration.ru.md) |
+[Compose](compose.ru.md) |
+[Назад к README](../README.ru.md)
+
+English: [usage.md](usage.md).

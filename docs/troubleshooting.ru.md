@@ -2,7 +2,7 @@
 
 Типичные проблемы, их причины и способы устранения.
 
-См. также: [../README.md](../README.md)
+См. также: [../README.md](../README.ru.md)
 
 ---
 
@@ -272,8 +272,8 @@ docker run \
 ```
 
 В конфигурации ModSecurity файлы правил подключаются через `Include`. См.
-[limitations.md](limitations.md) для полного списка ограничений WAF и
-[configuration.md](configuration.md) для описания тумблера
+[limitations.ru.md](limitations.ru.md) для полного списка ограничений WAF и
+[configuration.ru.md](configuration.ru.md) для описания тумблера
 `ANGIE_MODSECURITY_ENABLED`.
 
 ---
@@ -409,14 +409,15 @@ Angie продолжает запускаться с `worker_processes auto`, п
 
 **Решение.** Либо уберите ограничение read-only на `/etc/angie`, либо
 смиритесь с `worker_processes auto` и положитесь на встроенное определение
-Angie. См. [configuration.md](configuration.md) для описания переменной
-`ANGIE_ENTRYPOINT_WORKER_PROCESSES_AUTOTUNE` и [limitations.md](limitations.md)
+Angie. См. [configuration.ru.md](configuration.ru.md) для описания переменной
+`ANGIE_ENTRYPOINT_WORKER_PROCESSES_AUTOTUNE` и [limitations.ru.md](limitations.ru.md)
 для описания ограничений файловой системы.
 
 ---
 
-[English](troubleshooting.md) |
-[Конфигурация](configuration.md) |
-[Безопасность](security.md) |
-[Использование](usage.md) |
-[Назад к README](../README.md)
+[Конфигурация](configuration.ru.md) |
+[Безопасность](security.ru.md) |
+[Использование](usage.ru.md) |
+[Назад к README](../README.ru.md)
+
+English: [troubleshooting.md](troubleshooting.md).

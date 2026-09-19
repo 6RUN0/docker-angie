@@ -192,4 +192,5 @@ within 72 hours and to coordinate disclosure before any public announcement.
 ---
 
 - [Back to README](../README.md)
-- [Russian version](./security.ru.md)
+
+Russian: [security.ru.md](security.ru.md).

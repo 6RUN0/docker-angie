@@ -29,14 +29,14 @@ or [`webserver-llc/angie` releases](https://github.com/webserver-llc/angie/relea
 
 The current tag is embedded in examples and changelog entries, so update all of:
 
-- `README.md` / `README.ru.md` — example tags in the tag table
-  (`<angie>-build<N>-alpine`, `<angie>-alpine`, the `…-unprivileged` example).
-- `CHANGELOG.md` / `CHANGELOG.ru.md` — see step 4.
-- `docs/dockerhub-overview.md` — example tags in **both** the EN and RU tables.
+- `README.md` / `README.ru.md` - example tags in the tag table
+  (`<angie>-build<N>-alpine`, `<angie>-alpine`, the `...-unprivileged` example).
+- `CHANGELOG.md` / `CHANGELOG.ru.md` - see step 4.
+- `docs/dockerhub-overview.md` - example tags in **both** the EN and RU tables.
   Nothing pushes this file automatically; it is the source for the Docker Hub
   repository description, updated by hand (see step 6).
-- `docs/limitations.md` / `docs/limitations.ru.md` — the `…-debian` pin example.
-- `docs/configuration.md` / `docs/configuration.ru.md` — the `IMAGE_VERSION`
+- `docs/limitations.md` / `docs/limitations.ru.md` - the `...-debian` pin example.
+- `docs/configuration.md` / `docs/configuration.ru.md` - the `IMAGE_VERSION`
   example value.
 - `CLAUDE.md` - review for any version/tag reference (today only the meta-mention
   in the *Releasing* section, no literal version/tag string - check anyway).
@@ -78,7 +78,7 @@ allowed here are exactly those new-build URLs. Anything else is a real broken li
 ## 6. Tag and publish
 
 - Land all the changes (code + this build bump) on `develop` and push **only
-  `develop`** first — do not tag yet.
+  `develop`** first - do not tag yet.
 - Wait for the `develop` CI to go green. The tag triggers the publish, so it must
   not be pushed against an untested commit.
 - Once CI is green, tag the `develop` HEAD `v<angie>-build<N>` and push the tag.
@@ -98,3 +98,5 @@ allowed here are exactly those new-build URLs. Anything else is a real broken li
 - After publish, update the Docker Hub repository description by hand from
   `docs/dockerhub-overview.md`, then smoke-check a published image:
   `docker run --rm 6run0/angie:<angie>-build<N>-alpine angie -v`.
+
+Russian: [release-checklist.ru.md](release-checklist.ru.md).

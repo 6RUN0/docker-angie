@@ -75,8 +75,8 @@ Rootless-развёртывание (слушает 8080, работает от 
 docker run -d -p 8080:8080 6run0/angie:alpine-unprivileged
 ```
 
-- Примеры Compose → [docs/compose.ru.md](docs/compose.ru.md)
-- Сборка образов из исходников → [docs/usage.ru.md](docs/usage.ru.md)
+- Примеры Compose: [docs/compose.ru.md](docs/compose.ru.md)
+- Сборка образов из исходников: [docs/usage.ru.md](docs/usage.ru.md)
 
 ## Конфигурация
 
@@ -131,13 +131,13 @@ docker run -d -p 8080:8080 6run0/angie:alpine-unprivileged
 - ModSecurity загружает только движок - набор правил по умолчанию не
   поставляется; подключите свой (например, OWASP CRS).
 - Встроенные модули динамические и выключены до активации.
-- Полный список → [docs/limitations.ru.md](docs/limitations.ru.md).
+- Полный список: [docs/limitations.ru.md](docs/limitations.ru.md).
 
 ## Версионирование
 
 Тег образа кодирует **версию Angie** плюс **номер сборки** упаковки -
 `<angie>-build<N>-<variant>`. Номер сборки растёт, когда та же версия Angie
-переупаковывается (бамп базового образа, правка entrypoint, обновление
+переупаковывается (подъём базового образа, правка entrypoint, обновление
 angie-ctl). Версия Angie внутри образа также видна в метке
 `software.angie.version` (`docker inspect`) и через `angie -v`.
 
@@ -155,17 +155,17 @@ Angie (например, `1.12.1-rc1`) публикует лишь свой не
 
 ## Документация
 
-- [Конфигурация](docs/configuration.ru.md) — полный справочник env/томов/портов
-- [Использование](docs/usage.ru.md) — сборка, entrypoint, логи, коды возврата
-- [Compose](docs/compose.ru.md) — готовые к запуску compose-файлы
-- [Безопасность](docs/security.ru.md) — non-root, capabilities, секреты
-- [Ограничения](docs/limitations.ru.md) — известные границы
-- [Устранение неполадок](docs/troubleshooting.ru.md) — типичные ошибки
-- [История изменений](CHANGELOG.ru.md) — история релизов
-
-English: [README.md](README.md).
+- [Конфигурация](docs/configuration.ru.md) - полный справочник env/томов/портов
+- [Использование](docs/usage.ru.md) - сборка, entrypoint, логи, коды возврата
+- [Compose](docs/compose.ru.md) - готовые к запуску compose-файлы
+- [Безопасность](docs/security.ru.md) - non-root, capabilities, секреты
+- [Ограничения](docs/limitations.ru.md) - известные границы
+- [Устранение неполадок](docs/troubleshooting.ru.md) - типичные ошибки
+- [История изменений](CHANGELOG.ru.md) - история релизов
 
 ## Лицензия
 
 [MIT](LICENSE) для этой упаковки. Angie и встроенные сторонние модули сохраняют
 свои собственные лицензии.
+
+English: [README.md](README.md).

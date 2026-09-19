@@ -153,3 +153,5 @@ First public release: Angie 1.11.8 packaged for `linux/amd64` and `linux/arm64`.
 [1.11.8-build3]: https://github.com/6RUN0/docker-angie/releases/tag/v1.11.8-build3
 [1.11.8-build2]: https://github.com/6RUN0/docker-angie/releases/tag/v1.11.8-build2
 [1.11.8-build1]: https://github.com/6RUN0/docker-angie/releases/tag/v1.11.8-build1
+
+Russian: [CHANGELOG.ru.md](CHANGELOG.ru.md).

@@ -326,7 +326,8 @@ docker run --rm \
 
 ---
 
-[Russian version](usage.ru.md) |
 [Configuration](configuration.md) |
 [Compose](compose.md) |
 [Back to README](../README.md)
+
+Russian: [usage.ru.md](usage.ru.md).

@@ -74,11 +74,11 @@ entrypoint, однако защиты от повторного применен
 умолчанию от имени непривилегированного пользователя завершится немедленно с
 понятным сообщением об ошибке. Для работы без root используйте вариант образа
 с суффиксом `-unprivileged`, который слушает порт 8080 и имеет переназначенные
-пути. Подробнее см. [security.md](security.md).
+пути. Подробнее см. [security.ru.md](security.ru.md).
 
 ---
 
-[English](limitations.md) | [Русский](limitations.ru.md)
+- [Настройка конфигурации](configuration.ru.md)
+- [Защита и безопасность](security.ru.md)
 
-- [Настройка конфигурации](configuration.md)
-- [Защита и безопасность](security.md)
+English: [limitations.md](limitations.md).

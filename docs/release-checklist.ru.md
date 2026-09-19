@@ -4,19 +4,19 @@
 вышестоящего Angie плюс номер сборки упаковки - `<angie>-build<N>` - а не по
 семантическому версионированию самой упаковки (см. `CHANGELOG.md`). **Подъём
 сборки** перепаковывает ту же версию Angie (обновление базового образа, фикс
-entrypoint, обновление `angie-ctl`); **бамп версии Angie** меняет `ANGIE_VERSION`
-и сбрасывает номер сборки на `build1`.
+entrypoint, обновление `angie-ctl`); **подъём версии Angie** меняет
+`ANGIE_VERSION` и сбрасывает номер сборки на `build1`.
 
-## 1. Определите тип бампа
+## 1. Определите тип подъёма
 
 - Перепаковка той же версии Angie: увеличить только номер сборки.
 - Новая версия Angie: поднять `ANGIE_VERSION`, сбросить на `build1`.
 
-Для бампа Angie сверьте целевую версию по **живому источнику**, а не по памяти:
+Для подъёма Angie сверьте целевую версию по **живому источнику**, а не по памяти:
 [история версий](https://en.angie.software/angie/docs/oss_changes/) или
 [релизы `webserver-llc/angie`](https://github.com/webserver-llc/angie/releases).
 
-## 2. Правка пинов (только при бампе версии Angie)
+## 2. Правка пинов (только при подъёме версии Angie)
 
 - `alpine/Dockerfile` - `ARG ANGIE_VERSION=` (alpine тянет модули по нестрогому
   оператору apk `=~${ANGIE_VERSION}`).
@@ -25,18 +25,18 @@ entrypoint, обновление `angie-ctl`); **бамп версии Angie** �
 - Держите оба Dockerfile в синхроне. Пин `angie-ctl` (`ANGIE_CTL_COMMIT`) не
   зависит от версии Angie - поднимайте его только намеренно.
 
-## 3. Актуализируйте доки, в которых тег захардкожен
+## 3. Актуализируйте доки, в которых тег зашит
 
 Текущий тег встроен в примеры и записи changelog, поэтому обновите всё из:
 
-- `README.md` / `README.ru.md` — примеры тегов в таблице тегов
-  (`<angie>-build<N>-alpine`, `<angie>-alpine`, пример `…-unprivileged`).
-- `CHANGELOG.md` / `CHANGELOG.ru.md` — см. шаг 4.
-- `docs/dockerhub-overview.md` — примеры тегов в **обеих** таблицах (EN и RU).
-  Этот файл никуда не пушится автоматически; он — источник описания репозитория
-  на Docker Hub, которое обновляется вручную (см. шаг 6).
-- `docs/limitations.md` / `docs/limitations.ru.md` — пример пина `…-debian`.
-- `docs/configuration.md` / `docs/configuration.ru.md` — пример значения
+- `README.md` / `README.ru.md` - примеры тегов в таблице тегов
+  (`<angie>-build<N>-alpine`, `<angie>-alpine`, пример `...-unprivileged`).
+- `CHANGELOG.md` / `CHANGELOG.ru.md` - см. шаг 4.
+- `docs/dockerhub-overview.md` - примеры тегов в **обеих** таблицах (EN и RU).
+  Этот файл никуда не отправляется автоматически; он - источник описания
+  репозитория на Docker Hub, которое обновляется вручную (см. шаг 6).
+- `docs/limitations.md` / `docs/limitations.ru.md` - пример пина `...-debian`.
+- `docs/configuration.md` / `docs/configuration.ru.md` - пример значения
   `IMAGE_VERSION`.
 - `CLAUDE.md` - проверьте на любую ссылку на версию/тег (сейчас это только
   мета-упоминание в разделе *Releasing*, без буквального значения версии/тега -
@@ -100,3 +100,5 @@ make test            # smoke-тесты всех четырёх образов
 - После публикации вручную обновите описание репозитория на Docker Hub из
   `docs/dockerhub-overview.md`, затем сделайте smoke-проверку опубликованного
   образа: `docker run --rm 6run0/angie:<angie>-build<N>-alpine angie -v`.
+
+English: [release-checklist.md](release-checklist.md).

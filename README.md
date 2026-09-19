@@ -154,17 +154,17 @@ Floating tags move only for stable Angie releases; a prerelease Angie version
 
 ## Documentation
 
-- [Configuration](docs/configuration.md) — full env/volume/port reference
-- [Usage](docs/usage.md) — building, entrypoint, logs, exit codes
-- [Compose](docs/compose.md) — ready-to-run compose files
-- [Security](docs/security.md) — non-root, capabilities, secrets
-- [Limitations](docs/limitations.md) — known boundaries
-- [Troubleshooting](docs/troubleshooting.md) — common errors
-- [Changelog](CHANGELOG.md) — release history
-
-Russian: [README.ru.md](README.ru.md).
+- [Configuration](docs/configuration.md) - full env/volume/port reference
+- [Usage](docs/usage.md) - building, entrypoint, logs, exit codes
+- [Compose](docs/compose.md) - ready-to-run compose files
+- [Security](docs/security.md) - non-root, capabilities, secrets
+- [Limitations](docs/limitations.md) - known boundaries
+- [Troubleshooting](docs/troubleshooting.md) - common errors
+- [Changelog](CHANGELOG.md) - release history
 
 ## License
 
 [MIT](LICENSE) for this packaging. Angie and the bundled third-party modules
 retain their own respective licenses.
+
+Russian: [README.ru.md](README.ru.md).
