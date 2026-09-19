@@ -38,6 +38,13 @@ LYCHEE ?= lychee
 DOC_DIR := docs
 DOC_FILES := README.md README.ru.md CHANGELOG.md CHANGELOG.ru.md
 
+# Local run of the GitHub Actions workflow through act. Set ACT_JOB to run a
+# single job (e.g. make ci-local ACT_JOB=lint); empty runs the whole workflow.
+ACT ?= act
+ACT_RUNNER_IMAGE ?= catthehacker/ubuntu:act-latest
+ACT_TMPDIR ?= $(CURDIR)/.act-tmp
+ACT_JOB ?=
+
 .DEFAULT_GOAL := help
 
 .PHONY: help
@@ -136,6 +143,20 @@ test-alpine-unprivileged: build-alpine-unprivileged ## Smoke-test the rootless A
 .PHONY: test-debian-unprivileged
 test-debian-unprivileged: build-debian-unprivileged ## Smoke-test the rootless Debian image
 	IMAGE=$(IMAGE_DEBIAN_UNPRIV) ./test/smoke-unprivileged.sh
+
+# Neither act flag is optional. act runs the job inside a container while the
+# job's own `docker run` reaches the host daemon, so a bind-mounted fixture path
+# must resolve identically on both sides: --bind mounts the repository at its own
+# absolute path, and TMPDIR puts the smoke suites' mktemp fixtures inside it.
+# Without them the daemon silently substitutes empty directories and 14 smoke
+# tests fail on missing config, docroot and headers.
+.PHONY: ci-local
+ci-local: ## Run the CI workflow locally through act (needs act; ACT_JOB picks one job)
+	mkdir -p $(ACT_TMPDIR)
+	$(ACT) push -W .github/workflows/ci.yml --bind \
+		-P ubuntu-latest=$(ACT_RUNNER_IMAGE) \
+		--env TMPDIR=$(ACT_TMPDIR) \
+		$(if $(ACT_JOB),-j $(ACT_JOB))
 
 .PHONY: clean
 clean: ## Remove the built images

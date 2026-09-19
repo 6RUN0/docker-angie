@@ -165,6 +165,7 @@ make build-debian-unprivileged
 | `test-alpine-unprivileged` | Build + smoke-test the rootless Alpine image |
 | `test-debian-unprivileged` | Build + smoke-test the rootless Debian image |
 | **Other** | |
+| `ci-local` | Run the GitHub Actions CI workflow locally through [act](https://github.com/nektos/act) |
 | `clean` | Remove the four locally built images |
 
 Image names default to `angie-alpine`, `angie-debian`, etc. Override on the
@@ -173,6 +174,13 @@ command line:
 ```sh
 make build IMAGE_ALPINE=myrepo/angie:latest
 ```
+
+`ci-local` runs every job of `.github/workflows/ci.yml`; `ACT_JOB` narrows it to
+one (`make ci-local ACT_JOB=lint`). It needs `act` and a Docker daemon, and
+fixture-mounting smoke tests only pass because the target binds the repository
+at its own absolute path and points `TMPDIR` inside it: act runs the job in a
+container while the job's `docker run` reaches the host daemon, so a path that
+exists on only one side is silently replaced with an empty directory.
 
 ---
 

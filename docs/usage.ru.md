@@ -169,6 +169,7 @@ make build-debian-unprivileged
 | `test-alpine-unprivileged` | Сборка и smoke-тест rootless-образа Alpine |
 | `test-debian-unprivileged` | Сборка и smoke-тест rootless-образа Debian |
 | **Прочее** | |
+| `ci-local` | Прогнать workflow CI из GitHub Actions локально через [act](https://github.com/nektos/act) |
 | `clean` | Удалить четыре локально собранных образа |
 
 Имена образов по умолчанию: `angie-alpine`, `angie-debian` и т.д. Переопределить
@@ -177,6 +178,14 @@ make build-debian-unprivileged
 ```sh
 make build IMAGE_ALPINE=myrepo/angie:latest
 ```
+
+`ci-local` выполняет все job из `.github/workflows/ci.yml`; `ACT_JOB` сужает
+прогон до одного (`make ci-local ACT_JOB=lint`). Нужны `act` и демон Docker, а
+smoke-тесты с монтированием фикстур проходят только потому, что цель монтирует
+репозиторий по его собственному абсолютному пути и уводит туда же `TMPDIR`: act
+выполняет job в контейнере, а `docker run` внутри job уходит на хостовый демон,
+поэтому путь, существующий лишь с одной стороны, молча подменяется пустым
+каталогом.
 
 ---
 
