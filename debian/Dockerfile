@@ -154,6 +154,9 @@ VOLUME /etc/angie/custom
 
 EXPOSE 80
 
+# The shell form is required here: `|| exit 1` needs a shell. DL3025 does not
+# tell HEALTHCHECK apart from ENTRYPOINT/CMD, where exec form does matter.
+# hadolint ignore=DL3025
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
   CMD wget -q -O /dev/null http://127.0.0.1/healthz || exit 1
 
