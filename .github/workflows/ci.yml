@@ -87,7 +87,7 @@ jobs:
         with:
           image-ref: angie-${{ matrix.variant }}:test
           severity: CRITICAL,HIGH
-          # Fail only on CVEs that have an upstream fix available — the image
+          # Fail only on CVEs that have an upstream fix available - the image
           # tracks upstream security updates, so a fixable CVE means it is stale
           # and a rebuild resolves it. Unfixed CVEs would block CI with no action
           # the maintainer can take.

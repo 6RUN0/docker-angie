@@ -4,7 +4,7 @@ All notable changes to this image are documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Images are versioned by the upstream Angie release plus a packaging build
-number — `<angie>-build<N>` — not by semantic versioning of the packaging
+number - `<angie>-build<N>` - not by semantic versioning of the packaging
 itself. The build number increments when the same Angie version is repackaged
 (base-image bump, entrypoint fix, `angie-ctl` update).
 
@@ -19,9 +19,10 @@ itself. The build number increments when the same Angie version is repackaged
   a security release fixing worker process memory corruption/crash issues in
   `map` capture variables ([CVE-2026-42533](https://nvd.nist.gov/vuln/detail/CVE-2026-42533),
   [CVE-2026-60005](https://nvd.nist.gov/vuln/detail/CVE-2026-60005)) and SSI
-  with unbuffered proxying ([CVE-2026-56434](https://nvd.nist.gov/vuln/detail/CVE-2026-56434))
-  — all ported from nginx 1.31.3 — plus Metric module and `least_time`
-  upstream bugfixes.
+  with unbuffered proxying
+  ([CVE-2026-56434](https://nvd.nist.gov/vuln/detail/CVE-2026-56434)) - all
+  ported from nginx 1.31.3 - plus Metric module and `least_time` upstream
+  bugfixes.
 
 ## [1.12.0-build2] - 2026-07-16
 
@@ -32,7 +33,7 @@ itself. The build number increments when the same Angie version is repackaged
   `ANGIE_STATUS_API_HOST` / `ANGIE_STATUS_API_PORT` with charset validation)
   serving Angie's read-only JSON statistics tree at `/status/` and the stock
   `all` Prometheus template at `/metrics`. The port is not `EXPOSE`d and is
-  never published by default — reachable from the container's Docker network
+  never published by default - reachable from the container's Docker network
   until explicitly published.
 - **Structured JSON error log** toggled with `ANGIE_ERROR_LOG_JSON_ENABLED`:
   switches the `error_log` in `angie.conf` to Angie 1.12.0's `format=json`
@@ -44,16 +45,16 @@ itself. The build number increments when the same Angie version is repackaged
 
 ### Changed
 
-- **Angie 1.12.0** — the packaged Angie is bumped from 1.11.8 to the current
+- **Angie 1.12.0** - the packaged Angie is bumped from 1.11.8 to the current
   [1.12.0 upstream release](https://github.com/webserver-llc/angie/releases/tag/Angie-1.12.0).
 - `angie-ctl` is bumped to the current upstream, which removed its per-call
   `angie -t` together with the `--no-test` flag; the entrypoint wrapper now
   invokes `angie-ctl` bare. No behavior change: per-call validation was already
-  disabled in this image — the entrypoint still validates the assembled config
+  disabled in this image - the entrypoint still validates the assembled config
   once with its single final `angie -t`.
 - Heads-up from the Angie 1.12.0 bump itself: the `resolver` directive now
-  defaults to `conf` — DNS servers are read from `/etc/resolv.conf` (in a
-  container, Docker's embedded DNS) and re-read on change — so dynamic upstream
+  defaults to `conf` - DNS servers are read from `/etc/resolv.conf` (in a
+  container, Docker's embedded DNS) and re-read on change - so dynamic upstream
   resolution works out of the box. Previously a missing `resolver` meant no
   dynamic resolution at all; restore that with `resolver off;` via
   `/etc/angie/custom`.
@@ -70,7 +71,7 @@ itself. The build number increments when the same Angie version is repackaged
   state, so an orphan from one feature (e.g. a geoip2 log format outliving
   geoip2) could fail that intermediate test and abort startup at an unrelated,
   earlier script. The final test also closes a gap where a config that cannot
-  load would crash-loop angie after `exec` — it now fails loudly with the test
+  load would crash-loop angie after `exec` - it now fails loudly with the test
   output instead.
 
 ## [1.11.8-build3] - 2026-06-25
@@ -83,7 +84,7 @@ itself. The build number increments when the same Angie version is repackaged
   `ANGIE_*` environment requests. Removing a variable now disables its feature on
   the next start, instead of an enable-only toggle leaving it stuck on across
   restarts on a persistent `/etc/angie` volume. Layer custom configuration
-  through `/etc/angie/custom`, not by hand-enabling shipped snippets — those are
+  through `/etc/angie/custom`, not by hand-enabling shipped snippets - those are
   reset on the next start. `worker_processes` auto-tuning is the one exception
   (it rewrites `angie.conf` in place behind a one-time sentinel).
 
@@ -108,13 +109,13 @@ itself. The build number increments when the same Angie version is repackaged
 
 ### Added
 
-- **Zstandard compression** — a fifth bundled dynamic module
+- **Zstandard compression** - a fifth bundled dynamic module
   (`angie-module-zstd`), shipped disabled and toggled with `ANGIE_ZSTD_ENABLED`
   / `ANGIE_ZSTD_STATIC_ENABLED`, symmetric to the Brotli and gzip controls.
 - **Real-IP recovery** behind a trusted proxy/load balancer/ingress via
   `ANGIE_REAL_IP_FROM` (plus `ANGIE_REAL_IP_HEADER` and
   `ANGIE_REAL_IP_RECURSIVE`), with charset validation of every trusted-proxy
-  entry to prevent config injection. Uses the built-in real-IP module — no extra
+  entry to prevent config injection. Uses the built-in real-IP module - no extra
   package.
 - **Baseline security response headers** toggled with
   `ANGIE_SECURITY_HEADERS_ENABLED` (`X-Content-Type-Options`, `Referrer-Policy`,
@@ -126,7 +127,7 @@ First public release: Angie 1.11.8 packaged for `linux/amd64` and `linux/arm64`.
 
 ### Added
 
-- Angie 1.11.8 on two bases — **Alpine** (default) and **Debian** — each with a
+- Angie 1.11.8 on two bases - **Alpine** (default) and **Debian** - each with a
   rootless **unprivileged** variant (uid/gid 65532, listening on 8080).
 - Four bundled dynamic modules, shipped **disabled** and switched on at
   container start via `ANGIE_*` environment variables: Brotli, GeoIP2,
@@ -142,7 +143,7 @@ First public release: Angie 1.11.8 packaged for `linux/amd64` and `linux/arm64`.
 - OCI image labels, including `software.angie.version` exposing the packaged
   Angie version.
 - Published to the GitHub Container Registry (`ghcr.io/6run0/docker-angie`) and
-  Docker Hub (`6run0/angie`) with immutable `…-build<N>` and floating tags.
+  Docker Hub (`6run0/angie`) with immutable `...-build<N>` and floating tags.
 
 [Unreleased]: https://github.com/6RUN0/docker-angie/compare/v1.12.1-build1...HEAD
 [1.12.1-build1]: https://github.com/6RUN0/docker-angie/releases/tag/v1.12.1-build1

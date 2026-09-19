@@ -8,7 +8,7 @@ ARG BASE_IMAGE=angie-alpine
 FROM ${BASE_IMAGE}
 
 # Identity of the dedicated unprivileged user. uid/gid default to 65532
-# (distroless "nonroot") — high enough not to collide with a host's first user.
+# (distroless "nonroot") - high enough not to collide with a host's first user.
 # Override at build, e.g. --build-arg APP_UID=1234 --build-arg APP_GID=1234.
 ARG APP_USER=app
 ARG APP_GROUP=app

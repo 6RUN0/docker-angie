@@ -52,7 +52,7 @@ ARG ANGIE_CTL="/usr/local/bin/angie-ctl"
 # DL3003: the `cd` into the mktemp angie-ctl clone is scoped to this layer;
 # WORKDIR would leak into later instructions. SC1091: `. /etc/os-release` reads
 # a build-time file hadolint cannot follow. DL4006: the madison pipe needs no
-# pipefail — Debian's /bin/sh is dash (no `set -o pipefail`), and a failing pipe
+# pipefail - Debian's /bin/sh is dash (no `set -o pipefail`), and a failing pipe
 # yields an empty version that the explicit `[ -n ... ] || exit 1` guard catches.
 # hadolint ignore=DL3008,DL3003,SC1091,DL4006
 RUN \

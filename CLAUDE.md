@@ -8,7 +8,7 @@ Docker image build for the [Angie web server](https://angie.software) (an nginx
 fork) bundled with five dynamic modules: Brotli, Zstandard, GeoIP2, ModSecurity
 (WAF), and the substitutions filter. Two base variants are built from the same `rootfs/`:
 `alpine/Dockerfile` and `debian/Dockerfile`. There is no application source code
-here — the deliverable is the image, its entrypoint scripts, and the Angie
+here - the deliverable is the image, its entrypoint scripts, and the Angie
 configuration tree.
 
 ## Build & run
@@ -26,7 +26,7 @@ Validation is wired through the Makefile: `make lint` (shellcheck, hadolint,
 gixy config lint, actionlint/zizmor, docs) and `make test` (builds all four
 images and runs `test/smoke.sh` / `test/smoke-unprivileged.sh` against them).
 CI (`.github/workflows/ci.yml`) runs the same lint + build + smoke pipeline on
-every push/PR. All shell scripts — entrypoint and tests alike — are POSIX `sh`
+every push/PR. All shell scripts - entrypoint and tests alike - are POSIX `sh`
 (`#!/bin/sh`), checked with `shellcheck -s sh`.
 
 ## Architecture: the available.d / .d activation model
@@ -35,15 +35,15 @@ This is the single most important concept and spans many files.
 
 - Config snippets and module-load files are **shipped disabled**. They live in
   `*-available.d/` directories:
-  - `rootfs/etc/angie/http-conf-available.d/` — `http {}`-context snippets
-    (gzip, brotli, ssl, log formats, geoip2, websocket map, …).
-  - `rootfs/etc/angie/modules-available.d/` — `load_module` directives for the
+  - `rootfs/etc/angie/http-conf-available.d/` - `http {}`-context snippets
+    (gzip, brotli, ssl, log formats, geoip2, websocket map, ...).
+  - `rootfs/etc/angie/modules-available.d/` - `load_module` directives for the
     dynamic modules.
 - The **active** directories are what `angie.conf` actually includes (not the
-  `-available` ones). `modules.d/` ships empty (only `.gitkeep`) — every module
+  `-available` ones). `modules.d/` ships empty (only `.gitkeep`) - every module
   is enabled purely at runtime. `http-conf.d/` ships **two git-tracked symlinks
-  active by default** — `010-common.conf` and `050-ssl.conf` (each pointing into
-  `../http-conf-available.d/`) — plus `.gitkeep`; everything else there is
+  active by default** - `010-common.conf` and `050-ssl.conf` (each pointing into
+  `../http-conf-available.d/`) - plus `.gitkeep`; everything else there is
   activated at runtime. Note `050-ssl.conf` is active but inert: it sets only
   SSL session/cipher tuning and no server does `listen ... ssl` (the image
   `EXPOSE`s 80 only).
@@ -51,23 +51,23 @@ This is the single most important concept and spans many files.
   helper `angie-ctl` (cloned from `ANGIE_CTL_REPO` at a pinned `ANGIE_CTL_COMMIT`
   in the Dockerfile, installed to `/usr/local/bin/angie-ctl`) symlinks a snippet
   from `-available.d` into the active dir:
-  - `angie-ctl httpconf en <name>.conf` → enables an http-conf snippet.
-  - `angie-ctl mod en <name>.conf` → enables a module load.
+  - `angie-ctl httpconf en <name>.conf` enables an http-conf snippet.
+  - `angie-ctl mod en <name>.conf` enables a module load.
 
 When adding a feature: create the snippet in the matching `-available.d/`
-directory, then enable it from an entrypoint script — do **not** drop it directly
+directory, then enable it from an entrypoint script - do **not** drop it directly
 into the active `.d/` dir.
 
 ## Architecture: entrypoint flow
 
 `ENTRYPOINT` is `tini -- /docker-entrypoint.sh`; `CMD` is `angie -g 'daemon off;'`.
 
-- `rootfs/docker-entrypoint.sh` — only runs the configuration phase when `$1` is
+- `rootfs/docker-entrypoint.sh` - only runs the configuration phase when `$1` is
   `angie`/`angie-debug`. It executes every executable `*.sh` in
   `/docker-entrypoint.d/` in `sort -V` order, then validates the fully-assembled
   config once with a final `angie -t` (fail-fast) before `exec "$@"`. The toggles
   mutate config with `angie-ctl`, which runs no config test of its own, so this
-  is the **only** config test of the run — a transient inconsistency
+  is the **only** config test of the run - a transient inconsistency
   mid-toggling (e.g. an orphaned geoip2
   log format not yet reset when an earlier toggle enabled its snippet) is
   harmless; only the final state is tested. Non-executable or non-`.sh` files are
@@ -78,7 +78,7 @@ into the active `.d/` dir.
   the `reset_httpconf`/`reset_module` declarative-reset helpers, and the
   `enable_log_format`/`enable_log` helpers. Logging goes to fd 3, which maps to
   stderr or `/dev/null` when quiet.
-- `rootfs/docker-entrypoint.d/NN-*.sh` — one feature toggle per file, numbered to
+- `rootfs/docker-entrypoint.d/NN-*.sh` - one feature toggle per file, numbered to
   control order (30 tune, 31 error-log-json, 35 real-ip, 40 features,
   45 security headers, 50 geoip2, 60 websocket, 90 permission fixups). Each reads its `ANGIE_*` env
   var and calls `ngx_ctl` (the `angie-ctl` wrapper from
@@ -108,18 +108,18 @@ detection) and `31-error-log-json.sh` (the `error_log` line, toggled both ways).
 
 ## Angie config layout (`rootfs/etc/angie/`)
 
-- `angie.conf` — top-level; intentionally contains only `include` directives.
+- `angie.conf` - top-level; intentionally contains only `include` directives.
   Every include has a parallel `/etc/angie/custom/...` include so users can layer
   config via the `/etc/angie/custom` volume without editing baked-in files.
-- `http.d/default.conf` — the only active vhost: a catch-all `server` returning
+- `http.d/default.conf` - the only active vhost: a catch-all `server` returning
   `444` on `:80`. Real vhosts are expected via the custom volume.
-- Numeric filename prefixes (`010-`, `020-`, `030-log-format-…`, `040-log-…`)
+- Numeric filename prefixes (`010-`, `020-`, `030-log-format-...`, `040-log-...`)
   encode load order within the `http {}` context; keep new snippets in that scheme
   (formats are `030-`, active-log selection is `040-`).
 
 ## Conventions
 
-- `.editorconfig`: 2-space indent, LF, UTF-8, final newline, trim trailing ws —
+- `.editorconfig`: 2-space indent, LF, UTF-8, final newline, trim trailing ws -
   applies to all files including shell and conf.
 - `.dockerignore` whitelists only `rootfs/` and `rootfs-unprivileged/` into the
   build context (the latter is overlaid by the `*.unprivileged` Dockerfiles).

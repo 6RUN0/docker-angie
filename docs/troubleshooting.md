@@ -205,7 +205,7 @@ Verify the module loaded:
 docker exec <container> angie -T 2>/dev/null | grep geoip2
 ```
 
-**Related — startup aborts with `unknown "geoip2_country_code" variable`.** A
+**Related - startup aborts with `unknown "geoip2_country_code" variable`.** A
 geoip2 log format enabled on a previous run can outlive geoip2 on a persistent
 `/etc/angie` volume. angie validates the variables of every declared
 `log_format`, so the orphaned `*-with-geoip2` format fails `angie -t` for the
@@ -219,7 +219,7 @@ docker exec <container> angie-ctl httpconf dis \
   040-log-logfmt-with-geoip2.conf 030-log-format-logfmt-with-geoip2.conf
 ```
 
-The geoip2 map itself can orphan the same way — a stale `geoip2 <path>` left by
+The geoip2 map itself can orphan the same way - a stale `geoip2 <path>` left by
 a prior run fails `angie -t` with `MMDB_open(...) failed` once the database is
 gone. The entrypoint clears the map and its module at startup, so recreating the
 container heals this too.
@@ -229,10 +229,10 @@ snippets and modules it manages at every start, then re-enables only what the
 current `ANGIE_*` environment asks for. Removing a variable disables its feature
 on the next start (restart or recreate the container so the entrypoint re-runs),
 even on a persistent `/etc/angie` volume. Layer your own configuration through
-the `/etc/angie/custom` volume rather than enabling shipped snippets by hand —
+the `/etc/angie/custom` volume rather than enabling shipped snippets by hand -
 a hand-enabled snippet is disabled again on the next start. For example,
 disabling the default access log (`ANGIE_LOG_LOGFMT=no`) without selecting
-another format leaves the config with no global `access_log` at all — that is
+another format leaves the config with no global `access_log` at all - that is
 the declarative result, not a fault (`angie -t` still passes). The one exception
 is `worker_processes` auto-tuning (`ANGIE_ENTRYPOINT_WORKER_PROCESSES_AUTOTUNE`),
 which rewrites `angie.conf` in place behind a one-time sentinel: a value tuned on

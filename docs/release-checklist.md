@@ -1,7 +1,7 @@
 # Release checklist
 
 Maintainer steps for cutting a new image release. Images are versioned by the
-upstream Angie release plus a packaging build number — `<angie>-build<N>` — not
+upstream Angie release plus a packaging build number - `<angie>-build<N>` - not
 by semantic versioning of the packaging itself (see `CHANGELOG.md`). A **build
 bump** repackages the same Angie version (base-image bump, entrypoint fix,
 `angie-ctl` update); an **Angie version bump** changes `ANGIE_VERSION` and resets
@@ -9,8 +9,8 @@ the build number to `build1`.
 
 ## 1. Decide the kind of bump
 
-- Repackaging the same Angie version → increment the build number only.
-- New upstream Angie → bump `ANGIE_VERSION`, reset to `build1`.
+- Repackaging the same Angie version: increment the build number only.
+- New upstream Angie: bump `ANGIE_VERSION`, reset to `build1`.
 
 For an Angie bump, confirm the target version from a **live source**, never from
 memory: the [version history](https://en.angie.software/angie/docs/oss_changes/)
@@ -18,12 +18,12 @@ or [`webserver-llc/angie` releases](https://github.com/webserver-llc/angie/relea
 
 ## 2. Edit the pins (Angie version bump only)
 
-- `alpine/Dockerfile` — `ARG ANGIE_VERSION=` (alpine pulls modules with the
+- `alpine/Dockerfile` - `ARG ANGIE_VERSION=` (alpine pulls modules with the
   fuzzy `=~${ANGIE_VERSION}` apk operator).
-- `debian/Dockerfile` — `ARG ANGIE_VERSION=` (the build resolves the exact apt
+- `debian/Dockerfile` - `ARG ANGIE_VERSION=` (the build resolves the exact apt
   package version matching it).
 - Keep both Dockerfiles in sync. The `angie-ctl` pin (`ANGIE_CTL_COMMIT`) is
-  independent of the Angie version — bump it only when intended.
+  independent of the Angie version - bump it only when intended.
 
 ## 3. Actualize the docs that hard-code the tag
 
@@ -38,12 +38,12 @@ The current tag is embedded in examples and changelog entries, so update all of:
 - `docs/limitations.md` / `docs/limitations.ru.md` — the `…-debian` pin example.
 - `docs/configuration.md` / `docs/configuration.ru.md` — the `IMAGE_VERSION`
   example value.
-- `CLAUDE.md` — review for any version/tag reference (today only the meta-mention
-  in the *Releasing* section, no literal version/tag string — check anyway).
+- `CLAUDE.md` - review for any version/tag reference (today only the meta-mention
+  in the *Releasing* section, no literal version/tag string - check anyway).
 
 This list is a guide, not a guarantee. Catch every occurrence by grepping for the
 outgoing tag (the build you are replacing), e.g.
-`rg -F '<angie>-build<N-1>'` — every hit outside the historical `CHANGELOG`
+`rg -F '<angie>-build<N-1>'` - every hit outside the historical `CHANGELOG`
 entries must move to the new build.
 
 ## 4. CHANGELOG
@@ -53,8 +53,8 @@ In both `CHANGELOG.md` and `CHANGELOG.ru.md`:
 - Move the accumulated `[Unreleased]` / `[Не выпущено]` entries into a new
   `## [<angie>-build<N>] - <YYYY-MM-DD>` section.
 - Update the footer links: repoint `[Unreleased]` (`[Не выпущено]` in the RU
-  file) to `…/compare/v<angie>-build<N>...HEAD` and add
-  `[<angie>-build<N>]: …/releases/tag/v<angie>-build<N>`.
+  file) to `compare/v<angie>-build<N>...HEAD` and add
+  `[<angie>-build<N>]: releases/tag/v<angie>-build<N>`.
 - Keep the EN and RU entries factually identical (same versions, dates, names).
 - The `## [<angie>-build<N>]` header must match the tag **exactly** (modulo the
   leading `v`): the release workflow lifts the GitHub Release notes from this
@@ -71,7 +71,7 @@ make test            # smoke-test all four images
 ```
 
 `make lint-docs-links` will report the new `[<angie>-build<N>]` and `[Unreleased]`
-footer links from step 4 as `404` — the `compare/…` and `releases/tag/…` URLs do
+footer links from step 4 as `404` - the `compare/` and `releases/tag/` URLs do
 not resolve until the tag is pushed in step 6. That is expected; the only failures
 allowed here are exactly those new-build URLs. Anything else is a real broken link.
 
@@ -82,17 +82,17 @@ allowed here are exactly those new-build URLs. Anything else is a real broken li
 - Wait for the `develop` CI to go green. The tag triggers the publish, so it must
   not be pushed against an untested commit.
 - Once CI is green, tag the `develop` HEAD `v<angie>-build<N>` and push the tag.
-  The format is **validated** by CI (`vX.Y.Z-buildN`) — a malformed tag fails the
+  The format is **validated** by CI (`vX.Y.Z-buildN`) - a malformed tag fails the
   release, it does not merely break CHANGELOG links.
 - Only **after** the tagged release has published, merge `develop` into `main`
   (the PR target) so `main` tracks the released state.
 - Pushing the tag triggers `.github/workflows/release.yml`, which:
   - builds and pushes all four images (alpine, debian + their unprivileged
     variants) to GHCR and Docker Hub (`6run0/angie`), publishing the immutable
-    `…-build<N>` tag plus the floating tags (`latest`, `alpine`, …);
+    `...-build<N>` tag plus the floating tags (`latest`, `alpine`, ...);
   - then creates a **GitHub Release**, lifting its notes from the matching
     `## [<angie>-build<N>]` `CHANGELOG.md` section (step 4); a header that does
-    not match the tag fails this job. Re-running is safe — it is idempotent.
+    not match the tag fails this job. Re-running is safe - it is idempotent.
 - The Docker Hub push needs the `DOCKERHUB_USERNAME` / `DOCKERHUB_TOKEN` repo
   secrets; the GitHub Release needs no extra setup.
 - After publish, update the Docker Hub repository description by hand from

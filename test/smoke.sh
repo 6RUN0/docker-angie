@@ -144,7 +144,7 @@ fi
 cip=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' "$cid" 2>/dev/null || true)
 if [ -n "$cip" ]; then
   if docker run --rm --label "$SMOKE_RUN_LABEL" "$IMAGE" wget -q -O /dev/null "http://$cip/healthz" 2>/dev/null; then
-    fail "/healthz reachable from another container ($cip) — must be denied"
+    fail "/healthz reachable from another container ($cip) - must be denied"
   else
     pass "/healthz denied from external client ($cip)"
   fi

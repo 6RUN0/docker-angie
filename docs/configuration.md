@@ -87,7 +87,7 @@ more than one causes each request to be logged multiple times.
 
 | Variable | Default | Description |
 |---|---|---|
-| `ANGIE_ERROR_LOG_JSON_ENABLED` | `no` | Switch the error log (`/dev/stderr`) to Angie's structured JSON format: one object per line with `time`, `level`, `pid`, `message`, plus request/upstream context and `tags` when applicable. The field set is fixed by Angie — unlike access-log formats it is not templatable (only `error_log`'s `filter=`/`rate=` parameters and `error_log_user_tag` customize behavior; set those via the custom volume). The toggle rewrites the shipped `error_log` line in `angie.conf` in place and reverts it when unset; it leaves a user-customized `error_log` line alone and is a no-op on a read-only filesystem. |
+| `ANGIE_ERROR_LOG_JSON_ENABLED` | `no` | Switch the error log (`/dev/stderr`) to Angie's structured JSON format: one object per line with `time`, `level`, `pid`, `message`, plus request/upstream context and `tags` when applicable. The field set is fixed by Angie - unlike access-log formats it is not templatable (only `error_log`'s `filter=`/`rate=` parameters and `error_log_user_tag` customize behavior; set those via the custom volume). The toggle rewrites the shipped `error_log` line in `angie.conf` in place and reverts it when unset; it leaves a user-customized `error_log` line alone and is a no-op on a read-only filesystem. |
 
 ### WebSocket
 
@@ -233,7 +233,7 @@ response).
 
 Since Angie 1.12.0 (image `1.12.0-build1`), the `resolver` directive defaults
 to `conf` in the `http` and `stream` modules: Angie reads its DNS servers from
-`/etc/resolv.conf` — inside a container that is Docker's embedded DNS — and
+`/etc/resolv.conf` - inside a container that is Docker's embedded DNS - and
 re-reads the file whenever it changes. Dynamic name resolution (`proxy_pass`
 with variables, upstream `server ... resolve`) therefore works against Docker
 DNS out of the box, without a `resolver` line in your vhosts.
