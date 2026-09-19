@@ -10,11 +10,31 @@ itself. The build number increments when the same Angie version is repackaged
 
 ## [Unreleased]
 
+## [1.12.2-build1] - 2026-09-19
+
+### Changed
+
+- **Angie 1.12.2** - the packaged Angie is bumped from 1.12.1 to the current
+  [1.12.2 upstream release](https://github.com/webserver-llc/angie/releases/tag/Angie-1.12.2),
+  a security release fixing worker process memory corruption/crash on OpenSSL
+  3.5.0 and earlier, when an address whose default server also enables HTTP/3
+  (`listen ... quic`, possibly on another port) accepts a plain HTTPS request
+  that SNI routes to a `server` block without HTTP/3
+  ([CVE-2026-90439](https://nvd.nist.gov/vuln/detail/CVE-2026-90439)); the fix
+  was ported from nginx 1.31.6. The shipped configuration cannot reach it: no
+  baked-in `server` listens with `ssl` or `quic`. TLS listeners layered in
+  through `/etc/angie/custom` can.
+- **Zstandard module source** - upstream switched the `angie-module-zstd`
+  package to
+  [myguard-labs/nginx-zstd-module](https://github.com/myguard-labs/nginx-zstd-module)
+  0.90.8. Module file names and the `zstd*` directives used by
+  `020-zstd.conf` / `021-zstd_static.conf` are unchanged.
+
 ## [1.12.1-build1] - 2026-07-18
 
 ### Changed
 
-- **Angie 1.12.1** — the packaged Angie is bumped from 1.12.0 to the current
+- **Angie 1.12.1** - the packaged Angie is bumped from 1.12.0 to the current
   [1.12.1 upstream release](https://github.com/webserver-llc/angie/releases/tag/Angie-1.12.1),
   a security release fixing worker process memory corruption/crash issues in
   `map` capture variables ([CVE-2026-42533](https://nvd.nist.gov/vuln/detail/CVE-2026-42533),
@@ -145,7 +165,8 @@ First public release: Angie 1.11.8 packaged for `linux/amd64` and `linux/arm64`.
 - Published to the GitHub Container Registry (`ghcr.io/6run0/docker-angie`) and
   Docker Hub (`6run0/angie`) with immutable `...-build<N>` and floating tags.
 
-[Unreleased]: https://github.com/6RUN0/docker-angie/compare/v1.12.1-build1...HEAD
+[Unreleased]: https://github.com/6RUN0/docker-angie/compare/v1.12.2-build1...HEAD
+[1.12.2-build1]: https://github.com/6RUN0/docker-angie/releases/tag/v1.12.2-build1
 [1.12.1-build1]: https://github.com/6RUN0/docker-angie/releases/tag/v1.12.1-build1
 [1.12.0-build2]: https://github.com/6RUN0/docker-angie/releases/tag/v1.12.0-build2
 [1.12.0-build1]: https://github.com/6RUN0/docker-angie/releases/tag/v1.12.0-build1
