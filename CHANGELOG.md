@@ -10,6 +10,21 @@ itself. The build number increments when the same Angie version is repackaged
 
 ## [Unreleased]
 
+## [1.12.3-build1] - 2026-10-14
+
+### Changed
+
+- **Angie 1.12.3** - the packaged Angie is bumped from 1.12.2 to the
+  [1.12.3 upstream release](https://en.angie.software/angie/docs/oss_changes/),
+  released on 2026-10-13. Fixes cover early stream logging crashes, incorrect
+  log field names, HTTP/3 SSL statistics and upstream handshakes, stalled
+  non-idempotent upstream requests, ACME IP-address and wildcard validation,
+  shared-memory corruption with upstream keepalive and zone, mail proxy
+  logging, and minimal builds.
+- **Zstandard module** - the upstream `angie-module-zstd` package now uses
+  module version 0.90.9. The installed module set is unchanged; new optional
+  upstream modules are not added to these images.
+
 ## [1.12.2-build1] - 2026-09-19
 
 ### Changed
@@ -165,7 +180,8 @@ First public release: Angie 1.11.8 packaged for `linux/amd64` and `linux/arm64`.
 - Published to the GitHub Container Registry (`ghcr.io/6run0/docker-angie`) and
   Docker Hub (`6run0/angie`) with immutable `...-build<N>` and floating tags.
 
-[Unreleased]: https://github.com/6RUN0/docker-angie/compare/v1.12.2-build1...HEAD
+[Unreleased]: https://github.com/6RUN0/docker-angie/compare/v1.12.3-build1...HEAD
+[1.12.3-build1]: https://github.com/6RUN0/docker-angie/releases/tag/v1.12.3-build1
 [1.12.2-build1]: https://github.com/6RUN0/docker-angie/releases/tag/v1.12.2-build1
 [1.12.1-build1]: https://github.com/6RUN0/docker-angie/releases/tag/v1.12.1-build1
 [1.12.0-build2]: https://github.com/6RUN0/docker-angie/releases/tag/v1.12.0-build2
