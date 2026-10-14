@@ -10,6 +10,21 @@
 
 ## [Не выпущено]
 
+## [1.12.3-build1] - 2026-10-14
+
+### Изменено
+
+- **Angie 1.12.3** - упакованный Angie обновлён с 1.12.2 до
+  [релиза 1.12.3](https://en.angie.software/angie/docs/oss_changes/),
+  выпущенного 13.10.2026. Исправлены падения при раннем логировании в stream,
+  неверные имена полей логов, SSL-статистика HTTP/3 и соединения с upstream,
+  зависание неидемпотентных запросов к upstream, ACME-валидация IP-адресов и
+  wildcard-доменов, повреждение разделяемой памяти при совместном использовании
+  keepalive и zone, логирование почтового прокси и минимальные сборки.
+- **Модуль Zstandard** - пакет `angie-module-zstd` теперь использует версию
+  модуля 0.90.9. Состав установленных модулей не изменён; новые необязательные
+  модули вышестоящего проекта в образы не добавлены.
+
 ## [1.12.2-build1] - 2026-09-19
 
 ### Изменено
@@ -174,7 +189,8 @@
 - Публикация в GitHub Container Registry (`ghcr.io/6run0/docker-angie`) и
   Docker Hub (`6run0/angie`) с неизменяемыми тегами `...-build<N>` и плавающими тегами.
 
-[Не выпущено]: https://github.com/6RUN0/docker-angie/compare/v1.12.2-build1...HEAD
+[Не выпущено]: https://github.com/6RUN0/docker-angie/compare/v1.12.3-build1...HEAD
+[1.12.3-build1]: https://github.com/6RUN0/docker-angie/releases/tag/v1.12.3-build1
 [1.12.2-build1]: https://github.com/6RUN0/docker-angie/releases/tag/v1.12.2-build1
 [1.12.1-build1]: https://github.com/6RUN0/docker-angie/releases/tag/v1.12.1-build1
 [1.12.0-build2]: https://github.com/6RUN0/docker-angie/releases/tag/v1.12.0-build2

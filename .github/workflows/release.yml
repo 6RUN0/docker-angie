@@ -45,7 +45,7 @@ jobs:
 
       - name: Compute image tags
         id: tags
-        uses: ./.github/actions/compute-tags
+        uses: ./.github/actions/compute-tags # zizmor: ignore[self-repository] (actionlint 1.7.12 rejects $/ syntax)
         with:
           ref-name: ${{ github.ref_name }}
           repository: ${{ github.repository }}
@@ -104,7 +104,7 @@ jobs:
 
       - name: Compute image tags
         id: tags
-        uses: ./.github/actions/compute-tags
+        uses: ./.github/actions/compute-tags # zizmor: ignore[self-repository] (actionlint 1.7.12 rejects $/ syntax)
         with:
           ref-name: ${{ github.ref_name }}
           repository: ${{ github.repository }}
