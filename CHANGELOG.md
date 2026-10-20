@@ -10,6 +10,14 @@ itself. The build number increments when the same Angie version is repackaged
 
 ## [Unreleased]
 
+## [1.12.4-build1] - 2026-10-20
+
+### Changed
+
+- **Angie 1.12.4** - bump the packaged Angie from 1.12.3 to the
+  [1.12.4 upstream release](https://en.angie.software/angie/docs/oss_changes/),
+  released on 2026-10-16.
+
 ## [1.12.3-build1] - 2026-10-14
 
 ### Changed
@@ -180,7 +188,8 @@ First public release: Angie 1.11.8 packaged for `linux/amd64` and `linux/arm64`.
 - Published to the GitHub Container Registry (`ghcr.io/6run0/docker-angie`) and
   Docker Hub (`6run0/angie`) with immutable `...-build<N>` and floating tags.
 
-[Unreleased]: https://github.com/6RUN0/docker-angie/compare/v1.12.3-build1...HEAD
+[Unreleased]: https://github.com/6RUN0/docker-angie/compare/v1.12.4-build1...HEAD
+[1.12.4-build1]: https://github.com/6RUN0/docker-angie/releases/tag/v1.12.4-build1
 [1.12.3-build1]: https://github.com/6RUN0/docker-angie/releases/tag/v1.12.3-build1
 [1.12.2-build1]: https://github.com/6RUN0/docker-angie/releases/tag/v1.12.2-build1
 [1.12.1-build1]: https://github.com/6RUN0/docker-angie/releases/tag/v1.12.1-build1
