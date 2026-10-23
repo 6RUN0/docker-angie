@@ -10,6 +10,8 @@
 
 ## [Не выпущено]
 
+## [1.12.4-build2] - 2026-10-23
+
 ### Добавлено
 
 - Обычные и непривилегированные образы Alpine и Debian получили одинаковый
@@ -306,7 +308,8 @@
 - Публикация в GitHub Container Registry (`ghcr.io/6run0/docker-angie`) и
   Docker Hub (`6run0/angie`) с неизменяемыми тегами `...-build<N>` и плавающими тегами.
 
-[Не выпущено]: https://github.com/6RUN0/docker-angie/compare/v1.12.4-build1...HEAD
+[Не выпущено]: https://github.com/6RUN0/docker-angie/compare/v1.12.4-build2...HEAD
+[1.12.4-build2]: https://github.com/6RUN0/docker-angie/releases/tag/v1.12.4-build2
 [1.12.4-build1]: https://github.com/6RUN0/docker-angie/releases/tag/v1.12.4-build1
 [1.12.3-build1]: https://github.com/6RUN0/docker-angie/releases/tag/v1.12.3-build1
 [1.12.2-build1]: https://github.com/6RUN0/docker-angie/releases/tag/v1.12.2-build1
