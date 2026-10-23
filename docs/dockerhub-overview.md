@@ -6,6 +6,10 @@ start via `ANGIE_*` environment variables. Bases: **Alpine** (default) and
 **Debian**, each with a rootless **unprivileged** variant.
 Multi-arch: `linux/amd64`, `linux/arm64`.
 
+Both variants support a read-only root filesystem with one writable `/data`
+mount. ACME, Console Light, security/caching toggles, and reusable snippets are
+included; use persistent `/data` rather than tmpfs when ACME is enabled.
+
 ## English
 
 ### Pull
@@ -19,6 +23,7 @@ docker pull 6run0/angie:alpine
 
 ```bash
 docker run -d -p 80:80 \
+  --read-only --tmpfs /data:mode=1777 \
   -e ANGIE_BROTLI_ENABLED=yes \
   -e ANGIE_GZIP_ENABLED=yes \
   -v /srv/angie-config:/etc/angie/custom:ro \
@@ -34,8 +39,8 @@ uid/gid `65532`.
 
 | Tag | Meaning |
 | --- | --- |
-| `1.12.3-build1-alpine`, `...-debian` | Immutable - exact Angie version + build. Pin this. |
-| `1.12.3-alpine` | Latest build of that Angie patch. |
+| `1.12.4-build1-alpine`, `...-debian` | Immutable - exact Angie version + build. Pin this. |
+| `1.12.4-alpine` | Latest build of that Angie patch. |
 | `1.12-alpine` | Latest patch of that Angie minor line. |
 | `alpine`, `debian` | Latest stable of that base. |
 | `latest` | Latest stable Alpine image. |
@@ -50,6 +55,9 @@ uid/gid `65532`.
 | `ANGIE_MODSECURITY_ENABLED` | `no` | ModSecurity WAF (engine only; bring your own rules). |
 | `ANGIE_SUBS_ENABLED` | `no` | Response-body substitutions filter. |
 | `GEOIP2_DB_COUNTRY` | unset | Path to a GeoIP2 country DB; enables GeoIP2 when readable. |
+| `ANGIE_ACME_ENABLED` | `no` | Built-in ACME client; requires persistent `/data`. |
+| `ANGIE_CONSOLE_ENABLED` | `no` | Console Light at a secret, authenticated path. |
+| `ANGIE_ERROR_LOG_JSON_ENABLED` | `yes` | JSON error and entrypoint logs. |
 
 Full reference:
 [configuration](https://github.com/6RUN0/docker-angie/blob/main/docs/configuration.md) ·
@@ -70,6 +78,7 @@ docker pull 6run0/angie:alpine
 
 ```bash
 docker run -d -p 80:80 \
+  --read-only --tmpfs /data:mode=1777 \
   -e ANGIE_BROTLI_ENABLED=yes \
   -e ANGIE_GZIP_ENABLED=yes \
   -v /srv/angie-config:/etc/angie/custom:ro \
@@ -85,8 +94,8 @@ uid/gid `65532`.
 
 | Тег | Значение |
 | --- | --- |
-| `1.12.3-build1-alpine`, `...-debian` | Неизменяемый - точная версия Angie + сборка. Фиксируйте его. |
-| `1.12.3-alpine` | Последняя сборка этого патча Angie. |
+| `1.12.4-build1-alpine`, `...-debian` | Неизменяемый - точная версия Angie + сборка. Фиксируйте его. |
+| `1.12.4-alpine` | Последняя сборка этого патча Angie. |
 | `1.12-alpine` | Последний патч этой минорной линии Angie. |
 | `alpine`, `debian` | Последний стабильный образ этой базы. |
 | `latest` | Последний стабильный образ Alpine. |
@@ -101,6 +110,9 @@ uid/gid `65532`.
 | `ANGIE_MODSECURITY_ENABLED` | `no` | WAF ModSecurity (только движок; правила свои). |
 | `ANGIE_SUBS_ENABLED` | `no` | Фильтр подстановок в теле ответа. |
 | `GEOIP2_DB_COUNTRY` | unset | Путь к базе GeoIP2 стран; включает GeoIP2, если файл доступен. |
+| `ANGIE_ACME_ENABLED` | `no` | Встроенный ACME; требует постоянного `/data`. |
+| `ANGIE_CONSOLE_ENABLED` | `no` | Console Light по секретному защищённому пути. |
+| `ANGIE_ERROR_LOG_JSON_ENABLED` | `yes` | JSON для error log и сообщений entrypoint. |
 
 Полный справочник:
 [конфигурация](https://github.com/6RUN0/docker-angie/blob/main/docs/configuration.ru.md) ·

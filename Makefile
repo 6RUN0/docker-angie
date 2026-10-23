@@ -10,7 +10,8 @@ DEBIAN_DOCKERFILE := debian/Dockerfile
 
 ENTRYPOINT_SCRIPTS := rootfs/docker-entrypoint.sh \
 	rootfs/docker-entrypoint-common.sh \
-	$(wildcard rootfs/docker-entrypoint.d/*.sh)
+	$(wildcard rootfs/docker-entrypoint.d/*.sh) \
+	$(wildcard rootfs/usr/local/bin/*)
 
 # nginx/angie vhost configs to security-lint with gixy.
 NGINX_CONFIGS := rootfs/etc/angie/http.d/default.conf \
@@ -18,8 +19,10 @@ NGINX_CONFIGS := rootfs/etc/angie/http.d/default.conf \
 
 # gixy security-lints the nginx/angie vhost configs. Upstream gixy is abandoned
 # and breaks on Python >= 3.12; gixy-ng is the maintained drop-in fork (PyPI:
-# gixy-ng) that runs on current Python. Override GIXY to use another install.
-GIXY ?= uvx --from gixy-ng gixy
+# gixy-ng) that runs on current Python. The version is pinned so a CI run does
+# not execute whatever release PyPI serves that day. Override GIXY to use
+# another install.
+GIXY ?= uvx --from gixy-ng==0.2.57 gixy
 
 # GitHub Actions linters; both expected on PATH like shellcheck/hadolint.
 # Override either to use another install (e.g. ZIZMOR='uvx zizmor').
@@ -53,16 +56,15 @@ help: ## Show this help
 		| awk 'BEGIN{FS=":.*?## "}{printf "  \033[36m%-26s\033[0m %s\n", $$1, $$2}'
 
 .PHONY: lint
-lint: lint-shell lint-docker lint-config lint-ci lint-docs ## Run all linters
+lint: lint-shell lint-docker lint-config lint-ci lint-docs lint-docs-local-links lint-conf-vars ## Run all linters
 
 .PHONY: lint-shell
-lint-shell: ## shellcheck entrypoint and test scripts (all POSIX sh)
-	shellcheck -s sh $(ENTRYPOINT_SCRIPTS) test/*.sh
+lint-shell: ## shellcheck entrypoint, CI helper and test scripts (all POSIX sh)
+	shellcheck -s sh $(ENTRYPOINT_SCRIPTS) ci/*.sh test/*.sh
 
 .PHONY: lint-docker
 lint-docker: ## hadolint all Dockerfiles
-	hadolint $(ALPINE_DOCKERFILE) $(DEBIAN_DOCKERFILE) \
-		$(ALPINE_DOCKERFILE).unprivileged $(DEBIAN_DOCKERFILE).unprivileged
+	hadolint $(ALPINE_DOCKERFILE) $(DEBIAN_DOCKERFILE)
 
 # Accepted zizmor advisories are suppressed inline (`# zizmor: ignore[...]`) at
 # their site, not globally, so new findings still surface at full confidence.
@@ -82,7 +84,7 @@ lint-config-full: ## gixy security-lint of the full effective config (needs $(IM
 		$(IMAGE_ALPINE)); \
 	tmp=$$(mktemp); ok=; \
 	for _ in $$(seq 1 40); do \
-		docker exec $$cid angie -T >"$$tmp" 2>/dev/null && { ok=1; break; }; \
+		docker exec $$cid angie-runtime -T >"$$tmp" 2>/dev/null && { ok=1; break; }; \
 		sleep 0.25; \
 	done; \
 	docker rm -f $$cid >/dev/null; \
@@ -104,45 +106,82 @@ lint-docs: ## typos + rumdl lint of the markdown docs (offline)
 lint-docs-links: ## lychee link-check of the markdown docs (hits the network)
 	$(LYCHEE) --no-progress $(DOC_DIR) $(DOC_FILES)
 
+# The offline counterpart of lint-docs-links: local files and anchors only, so
+# it runs as part of `lint`.
+.PHONY: lint-docs-local-links
+lint-docs-local-links: ## lychee check of local links and anchors in the markdown docs (offline)
+	$(LYCHEE) --offline --no-progress --include-fragments $(DOC_DIR) $(DOC_FILES)
+
+# A collision between a stock map/geo variable and one in custom/ is silent:
+# the last declaration wins and angie -t passes (ci/check-conf-vars.sh header).
+.PHONY: lint-conf-vars
+lint-conf-vars: ## Require the $_stock_ prefix on variables the shipped config declares
+	sh ci/check-conf-vars.sh
+
 .PHONY: build
 build: build-alpine build-debian build-alpine-unprivileged build-debian-unprivileged ## Build all images
 
 .PHONY: build-alpine
 build-alpine: ## Build the Alpine image
-	docker build -t $(IMAGE_ALPINE) -f $(ALPINE_DOCKERFILE) .
+	docker build --target standard -t $(IMAGE_ALPINE) -f $(ALPINE_DOCKERFILE) .
 
 .PHONY: build-debian
 build-debian: ## Build the Debian image
-	docker build -t $(IMAGE_DEBIAN) -f $(DEBIAN_DOCKERFILE) .
+	docker build --target standard -t $(IMAGE_DEBIAN) -f $(DEBIAN_DOCKERFILE) .
 
+# Both targets of one Dockerfile share its runtime stage, so whichever builds
+# second takes those layers from the build cache.
 .PHONY: build-alpine-unprivileged
-build-alpine-unprivileged: build-alpine ## Build the rootless Alpine image
-	docker build -t $(IMAGE_ALPINE_UNPRIV) -f $(ALPINE_DOCKERFILE).unprivileged \
-		--build-arg BASE_IMAGE=$(IMAGE_ALPINE) .
+build-alpine-unprivileged: ## Build the rootless Alpine image
+	docker build --target unprivileged -t $(IMAGE_ALPINE_UNPRIV) -f $(ALPINE_DOCKERFILE) .
 
 .PHONY: build-debian-unprivileged
-build-debian-unprivileged: build-debian ## Build the rootless Debian image
-	docker build -t $(IMAGE_DEBIAN_UNPRIV) -f $(DEBIAN_DOCKERFILE).unprivileged \
-		--build-arg BASE_IMAGE=$(IMAGE_DEBIAN) .
+build-debian-unprivileged: ## Build the rootless Debian image
+	docker build --target unprivileged -t $(IMAGE_DEBIAN_UNPRIV) -f $(DEBIAN_DOCKERFILE) .
 
-.PHONY: test
-test: test-alpine test-debian test-alpine-unprivileged test-debian-unprivileged ## Smoke-test all images
+# Smoke suites share one daemon and a 30 s health budget per container; run in
+# parallel they starve each other. GNU make < 4.4 serializes the whole run.
+.NOTPARALLEL: test
+.PHONY: test test-unit
+test: test-unit test-alpine test-debian test-alpine-unprivileged test-debian-unprivileged ## Test helpers and smoke-test all images
+
+test-unit: ## Test the vendored angie-ctl and the conf-vars linter without Docker
+	./test/angie-ctl.sh
+	sh test/check-conf-vars.sh
 
 .PHONY: test-alpine
 test-alpine: build-alpine ## Smoke-test the Alpine image
 	IMAGE=$(IMAGE_ALPINE) ./test/smoke.sh
+	IMAGE=$(IMAGE_ALPINE) PORT=80 ./test/smoke-layout.sh
 
 .PHONY: test-debian
 test-debian: build-debian ## Smoke-test the Debian image
 	IMAGE=$(IMAGE_DEBIAN) ./test/smoke.sh
+	IMAGE=$(IMAGE_DEBIAN) PORT=80 ./test/smoke-layout.sh
 
 .PHONY: test-alpine-unprivileged
 test-alpine-unprivileged: build-alpine-unprivileged ## Smoke-test the rootless Alpine image
 	IMAGE=$(IMAGE_ALPINE_UNPRIV) ./test/smoke-unprivileged.sh
+	IMAGE=$(IMAGE_ALPINE_UNPRIV) PORT=8080 ./test/smoke-layout.sh
 
 .PHONY: test-debian-unprivileged
 test-debian-unprivileged: build-debian-unprivileged ## Smoke-test the rootless Debian image
 	IMAGE=$(IMAGE_DEBIAN_UNPRIV) ./test/smoke-unprivileged.sh
+	IMAGE=$(IMAGE_DEBIAN_UNPRIV) PORT=8080 ./test/smoke-layout.sh
+
+# Not part of `test`: the suite pulls the third-party Pebble image, so it needs
+# the network and a foreign registry. Without a live CA no token exists and the
+# challenge handler is indistinguishable from a missing one.
+.PHONY: test-acme
+test-acme: build-alpine build-alpine-unprivileged ## End-to-end ACME issuance against a local CA, both Alpine variants (needs network)
+	IMAGE=$(IMAGE_ALPINE) PORT=80 ./test/acme-e2e.sh
+	IMAGE=$(IMAGE_ALPINE_UNPRIV) PORT=8080 ./test/acme-e2e.sh
+
+# Not part of `test`: every probe is a docker build that reaches the network for
+# the signing key and package indexes (test/build-mirrors.sh header).
+.PHONY: test-build-mirrors
+test-build-mirrors: ## Build refusals on unreachable and unusable package mirrors (needs network)
+	sh test/build-mirrors.sh
 
 # Neither act flag is optional. act runs the job inside a container while the
 # job's own `docker run` reaches the host daemon, so a bind-mounted fixture path

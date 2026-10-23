@@ -2,13 +2,10 @@
 
 . /docker-entrypoint-common.sh
 
-skip_toggle_unless_writable
-
 : "${ANGIE_MODSECURITY_ENABLED:=no}"
 
-# Reset the ModSecurity module before re-enabling per env, so disabling it
-# (clearing ANGIE_MODSECURITY_ENABLED) actually unloads it on a persistent
-# /etc/angie volume instead of leaving the load_module stuck on.
+# Reset the ModSecurity module before re-enabling per env (declarative toggle,
+# see docker-entrypoint-common.sh): only ANGIE_MODSECURITY_ENABLED loads it.
 reset_module http_modsecurity.conf
 
 case "${ANGIE_MODSECURITY_ENABLED}" in

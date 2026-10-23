@@ -2,11 +2,9 @@
 # Dockerfiles (FROM/ARG ...=image:tag) and the GitHub Actions used in workflows.
 #
 # It does NOT track the angie/angie-module-* apk/apt packages (pinned via
-# ARG ANGIE_VERSION, installed inside RUN) nor the angie-ctl pin
-# (ARG ANGIE_CTL_COMMIT, fetched by git). The upstream-check workflow
-# (.github/workflows/upstream-check.yml) covers those: it opens a PR bumping
-# both pins in the two Dockerfiles when a newer Angie package or angie-ctl
-# commit appears.
+# ARG ANGIE_VERSION, installed inside RUN). The upstream-check workflow opens
+# a PR for newer Angie packages. Console Light and the vendored angie-ctl are
+# updated manually with their integration tests.
 version: 2
 updates:
   - package-ecosystem: docker

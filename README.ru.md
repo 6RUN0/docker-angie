@@ -12,7 +12,9 @@
 
 Встроенные модули - Brotli, Zstandard, GeoIP2, ModSecurity (WAF) и фильтр
 подстановок - поставляются **выключенными** и включаются при старте контейнера через
-переменные окружения `ANGIE_*`. Публикуются две базы: **Alpine** (по умолчанию)
+переменные окружения `ANGIE_*`. Также есть необязательные ACME, Console Light,
+кеширование, CORS, HSTS и переиспользуемые сниппеты. Публикуются две базы:
+**Alpine** (по умолчанию)
 и **Debian**, у каждой есть rootless-вариант **unprivileged**.
 
 ## Требования
@@ -62,6 +64,7 @@ docker exec angie wget -qO- http://127.0.0.1/healthz   # -> ok
 
 ```bash
 docker run -d --name angie \
+  --read-only --tmpfs /data:mode=1777 \
   -p 80:80 \
   -e ANGIE_BROTLI_ENABLED=yes \
   -e ANGIE_GZIP_ENABLED=yes \
@@ -72,15 +75,21 @@ docker run -d --name angie \
 Rootless-развёртывание (слушает 8080, работает от uid/gid 65532):
 
 ```bash
-docker run -d -p 8080:8080 6run0/angie:alpine-unprivileged
+docker run -d --read-only --tmpfs /data:mode=1777 \
+  -p 8080:8080 6run0/angie:alpine-unprivileged
 ```
+
+Оба варианта поддерживают корень только для чтения. Обычный образ сохраняет
+root-мастер, рабочие процессы `angie` и порт 80; непривилегированный использует
+порт 8080 и по умолчанию uid/gid 65532. В обоих вариантах `/etc/angie` -
+неизменяемый шаблон, а рабочее дерево пересобирается в `/data/conf` при старте.
 
 - Примеры Compose: [docs/compose.ru.md](docs/compose.ru.md)
 - Сборка образов из исходников: [docs/usage.ru.md](docs/usage.ru.md)
 
 ## Конфигурация
 
-Ключевые тумблеры (полная таблица из 20+ переменных в
+Ключевые тумблеры (полный справочник в
 [docs/configuration.ru.md](docs/configuration.ru.md)):
 
 | Переменная | По умолчанию | Описание |
@@ -94,8 +103,16 @@ docker run -d -p 8080:8080 6run0/angie:alpine-unprivileged
 | `ANGIE_MAP_WEBSOCKET_ENABLED` | `no` | Включить карту переменных для апгрейда WebSocket. |
 | `ANGIE_REAL_IP_FROM` | unset | CIDR доверенных прокси; восстанавливает реальный IP клиента за прокси/балансировщиком. |
 | `ANGIE_SECURITY_HEADERS_ENABLED` | `no` | Отдавать консервативный базовый набор security-заголовков. |
+| `ANGIE_CHARSET_UTF8_ENABLED` | `no` | Объявлять UTF-8 для текстовых типов ответов. |
+| `ANGIE_EXPIRES_ENABLED` | `no` | Объявить сроки кеширования для `snippets/expires-by-type.conf`. |
+| `ANGIE_OPEN_FILE_CACHE_ENABLED` | `no` | Кешировать открытые файлы и метаданные. |
+| `ANGIE_HSTS_ENABLED` | `no` | Отдавать HSTS по HTTPS; сначала прочитайте порядок отключения. |
+| `ANGIE_CORS_ASSETS_ENABLED` | `no` | Разрешить использование шрифтов и изображений с других источников. |
 | `ANGIE_STATUS_API_ENABLED` | `no` | Отдавать JSON статус-API и Prometheus `/metrics` на `:8181`. |
-| `ANGIE_ERROR_LOG_JSON_ENABLED` | `no` | Писать лог ошибок структурированным JSON (объект на строку). |
+| `ANGIE_CONSOLE_ENABLED` | `no` | Отдавать Console Light по секретному пути, обычно под basic auth. |
+| `ANGIE_ACME_ENABLED` | `no` | Настроить встроенный клиент ACME; при включении сохраняйте `/data`. |
+| `ANGIE_ERROR_LOG_JSON_ENABLED` | `yes` | Писать error log и журнал entrypoint как JSON, один объект на строку. |
+| `ANGIE_WORKER_SHUTDOWN_TIMEOUT` | `8s` | Ограничить мягкое завершение worker меньше grace period контейнера. |
 | `ANGIE_ENTRYPOINT_WORKER_PROCESSES_AUTOTUNE` | unset | Настроить `worker_processes` под число CPU при старте. |
 
 Переменные access-лога делятся на два семейства, которые легко спутать по
@@ -107,24 +124,38 @@ docker run -d -p 8080:8080 6run0/angie:alpine-unprivileged
 - `ANGIE_LOG_*` (например, `ANGIE_LOG_LOGFMT_GEOIP2`) **регистрируют и
   активируют** формат как access-лог. Активация одного сбрасывает остальные,
   поэтому активным остаётся ровно один access-лог - именно это переопределяет
-  формат по умолчанию `logfmt`. Включение двух привело бы к двойной записи
+  формат JSON по умолчанию. Включение двух привело бы к двойной записи
   каждого запроса.
 
 Варианты `*_GEOIP2` дополнительно требуют поднятого GeoIP2 (`GEOIP2_DB_COUNTRY`
 задан и доступен для чтения). Полная таблица:
-[docs/configuration.ru.md](docs/configuration.ru.md#форматы-логов).
+[docs/configuration.ru.md](docs/configuration.ru.md#логи-доступа).
 
-Монтируйте кастомную конфигурацию в том **`/etc/angie/custom`**.
+Монтируйте кастомную конфигурацию в том **`/etc/angie/custom`**. Подключаются
+только его подкаталоги `conf.d`, `http-conf.d` и `http.d`.
 
 ## Данные и состояние
 
-Образ **stateless** - вся рантайм-конфигурация выводится из переменных `ANGIE_*`
-и тома `/etc/angie/custom` при старте контейнера; ничего, что нужно бэкапить, не
-пишется. Конфигурация применяется **один раз при создании**, поэтому изменение
-переменной `ANGIE_*` вступает в силу при **пересоздании** контейнера, а не через
-`docker restart`. Unprivileged-образ работает от uid/gid `65532` и владеет
-`/etc/angie/*.d`; о запуске под сторонним `--user` см.
-[docs/security.ru.md](docs/security.ru.md).
+Пока ACME выключен, образ не хранит состояние. При каждом старте точка входа
+копирует неизменяемый шаблон `/etc/angie` в `/data/conf`, применяет там
+настройки `ANGIE_*`, а временные файлы размещает в `/data/tmp`. Пользовательскую
+конфигурацию монтируйте только в `/etc/angie/custom`; не монтируйте `/data/conf`.
+
+Каталог `/data` должен быть доступен для записи. При обычном запуске достаточно
+слоя контейнера; с `--read-only` подключите `--tmpfs /data:mode=1777` или том.
+При включённом ACME нужен постоянный том, а не tmpfs: в `/data/acme` находятся
+ключи учётной записи и сертификаты. Изменение переменной окружения требует
+пересоздать контейнер. После правки пользовательского тома проверьте
+конфигурацию и отправьте HUP:
+
+```bash
+docker exec angie angie -p /data/conf -c angie.conf -t
+docker kill -s HUP angie
+```
+
+`angie -s reload` не поддерживается, потому что задано `pid off`.
+Переход со старой изменяемой раскладки `/etc/angie` описан в
+[docs/usage.ru.md](docs/usage.ru.md).
 
 ## Ограничения
 
@@ -143,15 +174,15 @@ angie-ctl). Версия Angie внутри образа также видна �
 
 | Тег | Значение |
 | --- | --- |
-| `1.12.3-build1-alpine`, `...-debian` | Неизменяемый - точная версия Angie и упаковка. **Фиксируйте его.** |
-| `1.12.3-alpine` | Последняя сборка этого патча Angie. |
+| `1.12.4-build1-alpine`, `...-debian` | Неизменяемый - точная версия Angie и упаковка. **Фиксируйте его.** |
+| `1.12.4-alpine` | Последняя сборка этого патча Angie. |
 | `1.12-alpine` | Последний патч этой минорной линии Angie. |
 | `alpine`, `debian` | Последний стабильный образ этой базы. |
 | `latest` | Последний стабильный образ **Alpine**. |
-| `*-unprivileged` | Rootless-вариант; суффикс ко всем тегам выше, кроме `latest` (например, `alpine-unprivileged`, `1.12.3-build1-alpine-unprivileged`). |
+| `*-unprivileged` | Rootless-вариант; суффикс ко всем тегам выше, кроме `latest` (например, `alpine-unprivileged`, `1.12.4-build1-alpine-unprivileged`). |
 
 Плавающие теги двигаются только для стабильных релизов Angie; prerelease-версия
-Angie (например, `1.12.3-rc1`) публикует лишь свой неизменяемый тег `...-build<N>`.
+Angie (например, `1.12.4-rc1`) публикует лишь свой неизменяемый тег `...-build<N>`.
 
 ## Документация
 
@@ -161,6 +192,7 @@ Angie (например, `1.12.3-rc1`) публикует лишь свой не
 - [Безопасность](docs/security.ru.md) - non-root, capabilities, секреты
 - [Ограничения](docs/limitations.ru.md) - известные границы
 - [Устранение неполадок](docs/troubleshooting.ru.md) - типичные ошибки
+- [Устройство образов](docs/architecture.ru.md) - как собраны образы и почему
 - [История изменений](CHANGELOG.ru.md) - история релизов
 
 ## Лицензия

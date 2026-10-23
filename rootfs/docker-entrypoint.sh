@@ -4,24 +4,21 @@
 
 entrypoint_dir="/docker-entrypoint.d"
 
-if { [ "$1" = "angie" ] || [ "$1" = "angie-debug" ]; } && ! is_root && [ -z "${ANGIE_UNPRIVILEGED:-}" ]; then
-  # The default image must run as root: it binds port 80, its pidfile
-  # (/run/angie.pid) and temp dirs (/var/cache/angie/*) are root-owned, and
-  # angie-ctl needs write access to /etc/angie/*.d. A non-root master cannot do
-  # any of that, so angie would crash later with an opaque EACCES. Fail fast with
-  # a clear message instead. The unprivileged image variant sets
-  # ANGIE_UNPRIVILEGED=1, which lifts this guard: its config is baked at build
-  # time and its pid/temp paths and listener were relocated for rootless use.
-  ngx_err "the default image requires root; got uid $(id -u). Use the unprivileged image variant for rootless operation."
+if { [ "$1" = "angie" ] || [ "$1" = "angie-debug" ]; } &&
+  ! is_root && [ -z "${ANGIE_UNPRIVILEGED:-}" ]; then
+  # The default image must run as root: it binds port 80 and its workers switch
+  # to the angie user (conf.d/05-worker-user.conf). A non-root master would
+  # crash later with an opaque EACCES, so fail fast with a clear message. The
+  # unprivileged image sets ANGIE_UNPRIVILEGED=1, which lifts this guard.
+  ngx_err "the default image requires a root master for port 80 and the angie worker user; use the unprivileged image for rootless operation"
   exit 1
 elif [ "$1" = "angie" ] || [ "$1" = "angie-debug" ]; then
-  # Iterate with a glob in THIS shell. The previous `find ... | sort -V | while`
-  # ran the loop body in a pipeline subshell, where `set -e` does not propagate:
-  # a failing config script was silently discarded and angie started with a
-  # half-applied configuration. A `for` over the glob keeps the body in the main
-  # shell so a non-zero exit aborts startup. The two-digit numeric prefixes
-  # (30-, 40-, ... 90-) sort identically under the shell's lexical glob order,
-  # so no external `sort` is needed.
+  # Iterate with a glob in THIS shell. A `find ... | sort -V | while` loop runs
+  # its body in a pipeline subshell, where `set -e` does not propagate: a
+  # failing config script would be silently discarded and angie would start
+  # with a half-applied configuration. The two-digit numeric prefixes (10-,
+  # 30-, ... 90-) sort identically under the shell's lexical glob order, so no
+  # external `sort` is needed.
   found=
   for f in "$entrypoint_dir"/*; do
     # POSIX sh has no `nullglob`: an empty dir yields the literal pattern, so
@@ -40,7 +37,6 @@ elif [ "$1" = "angie" ] || [ "$1" = "angie-debug" ]; then
           exit "$rc"
         }
       else
-        # warn on shell scripts without exec bit
         ngx_warning "ignoring $f, not executable"
       fi
       ;;
@@ -56,14 +52,20 @@ elif [ "$1" = "angie" ] || [ "$1" = "angie-debug" ]; then
 
   # Single authoritative config test. The toggle scripts mutate config through
   # angie-ctl, which runs no config test itself, so this is the only `angie -t`
-  # of the run: it validates the fully-assembled final state once, here. A
-  # transient inconsistency while toggling -- e.g. an orphaned geoip2 log format
-  # not yet reset when an earlier script enabled its own snippet -- is therefore
-  # harmless; only the final state is tested. Fail loudly with the test output
-  # instead of letting the `exec` below start angie on a config that cannot load.
-  if ! ngx_test_output=$("$1" -t 2>&1); then
+  # of the run: a transient inconsistency while toggling (e.g. an orphaned
+  # geoip2 log format not yet reset) is harmless, only the final state is
+  # tested. The whole argument list is tested, not just the binary: the live
+  # tree is not at the compiled-in path, CMD points at it with -p and -c, and a
+  # bare `angie -t` would test the read-only skeleton instead of the copy.
+  if ! ngx_test_output=$("$@" -t 2>&1); then
     ngx_err "assembled configuration failed '$1 -t', aborting startup"
-    printf '%s\n' "$ngx_test_output" >&2
+    # In JSON mode the test output goes out as one record with escaped
+    # newlines: raw lines would break line-by-line parsing of the stream.
+    if [ -n "$ngx_log_json" ]; then
+      ngx_log_json_line "$(date -u +'%Y-%m-%dT%H:%M:%SZ')" error "$$" "$ngx_test_output" >&2
+    else
+      printf '%s\n' "$ngx_test_output" >&2
+    fi
     exit 1
   fi
 fi

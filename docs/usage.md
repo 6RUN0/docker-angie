@@ -11,6 +11,8 @@ Practical guide for running and building the Angie Docker image.
 - [Makefile targets](#makefile-targets)
 - [Entrypoint and execution order](#entrypoint-and-execution-order)
 - [Inspecting the effective configuration](#inspecting-the-effective-configuration)
+- [Applying a configuration edit](#applying-a-configuration-edit)
+- [Migrating from the writable `/etc/angie` layout](#migrating-from-the-writable-etcangie-layout)
 - [Logs](#logs)
 - [Fail-fast on entrypoint errors](#fail-fast-on-entrypoint-errors)
 
@@ -43,6 +45,7 @@ unknown `Host` header are silently dropped with connection-close (`444`).
 
 ```sh
 docker run -d \
+  --read-only --tmpfs /data:mode=1777 \
   -p 80:80 \
   -e ANGIE_BROTLI_ENABLED=1 \
   -e ANGIE_GZIP_ENABLED=1 \
@@ -60,11 +63,13 @@ See `../README.md` for the full `ANGIE_*` variable reference.
 ### Rootless (unprivileged) variant
 
 The `-unprivileged` variant runs without any elevated privileges. The listener
-moves to port 8080 (no `CAP_NET_BIND_SERVICE` required) and pid/temp paths
-relocate to `/tmp/angie`.
+moves to port 8080 (no `CAP_NET_BIND_SERVICE` required). Like the standard
+variant, it uses `/data/conf` for the live configuration and `/data/tmp` for
+temporary files; there is no pid file.
 
 ```sh
 docker run -d \
+  --read-only --tmpfs /data:mode=1777 \
   -p 8080:8080 \
   -e ANGIE_BROTLI_ENABLED=1 \
   -v /path/to/my/angie/conf:/etc/angie/custom:ro \
@@ -78,9 +83,9 @@ override it freely:
 docker run --user 1000:1000 -p 8080:8080 6run0/angie:alpine-unprivileged
 ```
 
-When the runtime uid does not own the activation directories the entrypoint
-scripts fall back to the configuration baked at build time and log a warning
--- the container still starts.
+The unprivileged image can run under any UID. `/data` must be writable by that
+UID; a fresh `mode=1777` tmpfs satisfies this. A persistent `/data/conf` created
+by another UID is rejected rather than overwritten.
 
 The standard (non-unprivileged) image requires root and refuses to start under
 `--user`, emitting a clear error message rather than crashing with `EACCES`.
@@ -93,30 +98,25 @@ The build context is always the repository root (`.`).
 
 ### Alpine and Debian base images
 
+Each Dockerfile has two final targets: `standard` (root master, port 80) and
+`unprivileged` (port 8080, see below). A build without `--target` produces
+`standard`.
+
 ```sh
-docker build -t angie-alpine -f alpine/Dockerfile .
-docker build -t angie-debian -f debian/Dockerfile .
+docker build --target standard -t angie-alpine -f alpine/Dockerfile .
+docker build --target standard -t angie-debian -f debian/Dockerfile .
 ```
 
-### Rootless overlays
+### Rootless targets
 
-The unprivileged images are built on top of the corresponding base image.
-Supply the local base tag via `--build-arg BASE_IMAGE`:
+The unprivileged images come from the `unprivileged` target of the same
+Dockerfile. Both targets share the `runtime` stage, so the second build takes
+the package and config layers from the build cache and nothing has to be built
+first:
 
 ```sh
-# Alpine rootless (base must be built first)
-docker build \
-  -f alpine/Dockerfile.unprivileged \
-  --build-arg BASE_IMAGE=angie-alpine \
-  -t angie-alpine-unprivileged \
-  .
-
-# Debian rootless
-docker build \
-  -f debian/Dockerfile.unprivileged \
-  --build-arg BASE_IMAGE=angie-debian \
-  -t angie-debian-unprivileged \
-  .
+docker build --target unprivileged -t angie-alpine-unprivileged -f alpine/Dockerfile .
+docker build --target unprivileged -t angie-debian-unprivileged -f debian/Dockerfile .
 ```
 
 Optional build args (`APP_USER`, `APP_GROUP`, `APP_UID`, `APP_GID`) let you
@@ -147,7 +147,7 @@ make build-debian-unprivileged
 | `help` | Show all available targets |
 | **Lint** | |
 | `lint` | Run all linters |
-| `lint-shell` | `shellcheck` on entrypoint scripts (POSIX sh) and `test/*.sh` (bash) |
+| `lint-shell` | `shellcheck` on entrypoint scripts, helpers, and tests (POSIX sh) |
 | `lint-docker` | `hadolint` on all four Dockerfiles |
 | `lint-config` | `gixy` security-lint of the standalone vhost fragments |
 | `lint-config-full` | `gixy` on the full effective config (requires `angie-alpine` to be built) |
@@ -159,7 +159,8 @@ make build-debian-unprivileged
 | `build-alpine-unprivileged` | Build the rootless Alpine image (depends on `build-alpine`) |
 | `build-debian-unprivileged` | Build the rootless Debian image (depends on `build-debian`) |
 | **Test** | |
-| `test` | Smoke-test all four images |
+| `test` | Run helper tests and both smoke suites for all four images |
+| `test-unit` | Test the vendored `angie-ctl` without Docker |
 | `test-alpine` | Build + smoke-test the Alpine image |
 | `test-debian` | Build + smoke-test the Debian image |
 | `test-alpine-unprivileged` | Build + smoke-test the rootless Alpine image |
@@ -189,7 +190,8 @@ exists on only one side is silently replaced with an empty directory.
 The entrypoint chain is:
 
 ```text
-tini -- /docker-entrypoint.sh  [CMD: angie -g 'daemon off;']
+tini -- /docker-entrypoint.sh \
+  [CMD: angie -p /data/conf -c angie.conf -g 'daemon off;']
 ```
 
 `tini` acts as PID 1, reaping zombie processes and forwarding signals to
@@ -197,9 +199,8 @@ tini -- /docker-entrypoint.sh  [CMD: angie -g 'daemon off;']
 
 ### Configuration phase
 
-`docker-entrypoint.sh` sources `docker-entrypoint-common.sh` (loggers,
-`is_root`, `skip_toggle_unless_writable`, `enable_log`/`enable_log_format`
-helpers) and then checks the first argument:
+`docker-entrypoint.sh` sources `docker-entrypoint-common.sh` (loggers, runtime
+paths, and activation helpers) and then checks the first argument:
 
 - If `$1` is `angie` or `angie-debug`, the configuration phase runs.
 - For any other command (e.g. `sh`) the phase is skipped and `exec "$@"` is
@@ -223,8 +224,10 @@ The scripts shipped in this image follow the numbering scheme below:
 
 | Range | Purpose |
 |---|---|
+| `10-*` | Rebuild `/data/conf` from the immutable skeleton |
 | `30-*` | System tuning (e.g. `worker_processes` autotune) |
-| `40-*` | Feature toggles (gzip, brotli, log format, WAF, subs, websocket map) |
+| `40-*` | Feature toggles, including ACME, Console, compression, logs, and modules |
+| `45-*` / `46-*` | Response security, HSTS, and asset CORS |
 | `50-*` | GeoIP2 setup (path validation, config rendering, module activation) |
 | `90-*` | Permission fixups |
 
@@ -251,16 +254,53 @@ The accepted truthy values are: `yes`, `on`, `1`, `true`, `enable`, `enabled`.
 
 ## Inspecting the effective configuration
 
-After the container is running, dump the fully resolved Angie configuration
-(all includes expanded, comments stripped):
+After the container is running, test or dump the live configuration with its
+explicit prefix:
 
 ```sh
-docker exec <container> angie -T
+docker exec <container> angie -p /data/conf -c angie.conf -t
+docker exec <container> angie -p /data/conf -c angie.conf -T
 ```
 
-This is also how `make lint-config-full` works: it starts a temporary
-container, polls until `angie -T` succeeds, captures the output, and runs
-`gixy` against it.
+The `/usr/local/bin/angie-runtime` wrapper supplies these arguments for image
+health checks and scripts. Use the explicit form in operational procedures so
+the checked tree is unambiguous.
+
+## Applying a configuration edit
+
+The custom volume remains mounted at `/etc/angie/custom`, so changing its files
+does not require recreating the container. Validate and signal the container:
+
+```sh
+docker exec angie angie -p /data/conf -c angie.conf -t
+docker kill -s HUP angie
+```
+
+`angie -s reload` is unsupported because the image uses `pid off`. Environment
+variables are fixed in the container definition; change them by recreating the
+container rather than sending HUP.
+
+Inside the container `angie-ctl --reload` works too: the image sets
+`ANGIE_RELOAD_CMD="kill -HUP 1"`, and tini (PID 1) forwards the signal to the
+master. A toggle enabled this way lasts until the next start, which rebuilds
+`/data/conf` from the skeleton and the environment.
+
+## Migrating from the writable `/etc/angie` layout
+
+This layout is a breaking change for consumers that mounted generated config
+or temporary directories directly:
+
+1. Keep user-owned files under `/etc/angie/custom/{conf.d,http-conf.d,http.d}`.
+2. Remove mounts for `/etc/angie`, `/etc/angie/*.d`, `/run/angie.pid`,
+   `/tmp/angie`, and `/var/cache/angie` that existed only to make the image
+   writable.
+3. Mount one writable `/data`; use tmpfs for stateless workloads and a
+   persistent volume for ACME or disk-backed caches.
+4. Update validation and reload commands to the explicit prefix and HUP forms
+   above.
+
+Never persist `/data/conf`: the entrypoint deliberately rebuilds it from the
+new image at every start so updated defaults reach existing deployments.
 
 ---
 
@@ -271,9 +311,9 @@ container, polls until `angie -T` succeeds, captures the output, and runs
 Angie writes access and error logs to `stdout`/`stderr` so the Docker log
 driver captures them without any extra configuration.
 
-The default access-log format is `logfmt`. See
+The default access-log format is structured JSON. See
 [configuration.md](configuration.md) for the full list of available formats
-(`main`, `logfmt`, `logfmt-with-geoip2`, `extended`, `matomo`) and the
+(`main`, `json`, `logfmt`, GeoIP2 variants, `extended`, `matomo`) and the
 corresponding `ANGIE_LOG_*` toggle variables.
 
 Only one access-log format can be active at a time. The `enable_log` helper
@@ -290,8 +330,8 @@ across restarts and cannot produce duplicate `access_log` directives.
 - `ANGIE_ENTRYPOINT_QUIET_LOGS` set to any non-empty value: fd 3 maps to
   `/dev/null` -- entrypoint messages are suppressed.
 
-All entrypoint log functions (`ngx_err`, `ngx_warning`, `ngx_notice`,
-`ngx_info`) write to fd 3 with the format:
+All entrypoint log functions write JSON by default, one object per line. Set
+`ANGIE_ERROR_LOG_JSON_ENABLED=no` to use the text format:
 
 ```text
 YYYY/MM/DD HH:MM:SS [level] <pid>: entrypoint: <message>

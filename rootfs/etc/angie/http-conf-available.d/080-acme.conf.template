@@ -1,0 +1,36 @@
+# Built-in ACME client: angie itself issues and renews certificates, without a
+# second container.
+# https://angie.software/angie/docs/configuration/modules/http/http_acme/
+#
+# Rendered at container start by 40-acme.sh. The module is static
+# (--with-http_acme_module), so it needs no load_module. This snippet orders
+# nothing by itself: issuance starts when a consumer server {} references the
+# client with `acme` and uses `ssl_certificate $acme_cert_<name>`, see
+# docs/configuration.md (ACME).
+
+# Client state: account key, private keys and issued certificates. angie
+# creates the directory itself, mode 0700, owned by the master's uid. It must
+# survive container re-creation: on `--tmpfs /data` certificates are reordered
+# on every start, and Let's Encrypt limits duplicates to 5 per week, so the
+# failure shows up later and looks like a CA problem.
+acme_client_path /data/acme;
+
+# No `resolver` here on purpose: since Angie 1.12.0 its default is `conf`, i.e.
+# /etc/resolv.conf of the container. Declaring it would be harmful: a second
+# `resolver` in the same context is fatal (`"resolver" directive is duplicate`),
+# and custom/http-conf.d shares this http {}. Conversely, your own
+# `resolver off;` disables ACME too (`no resolver configured`).
+
+# http-01 challenge port. It must equal the port of the image's built-in
+# listener (ANGIE_HTTP_PORT: 80 root, 8080 unprivileged): the module then opens
+# no listener of its own, and the challenge handler runs in the post_read phase
+# of existing servers, even one doing `return 301` to https, since post_read
+# precedes rewrite. The directive's own default is 80, which in the unprivileged
+# image would open a separate listener and fail to bind under a non-root uid.
+acme_http_port %%ACME_HTTP_PORT%%;
+
+# The client is declared only when ANGIE_ACME_DIRECTORY is set. Otherwise
+# declare your own in /etc/angie/custom/http-conf.d, with options the toggle
+# lacks (key_type, profile, eab); the two directives above stay from the image
+# either way, their values follow from its layout.
+%%ACME_CLIENT%%

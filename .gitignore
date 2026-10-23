@@ -2,6 +2,7 @@
 .*
 
 !/alpine/
+!/ci/
 !/debian/
 !/docs/
 !/rootfs/

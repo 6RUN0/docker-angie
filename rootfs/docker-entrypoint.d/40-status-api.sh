@@ -2,13 +2,11 @@
 
 . /docker-entrypoint-common.sh
 
-skip_toggle_unless_writable
-
 : "${ANGIE_STATUS_API_ENABLED:=no}"
 
-# Reset before deciding whether the API is on this start, so clearing
-# ANGIE_STATUS_API_ENABLED actually takes effect on a persistent /etc/angie
-# volume instead of leaving the listener stuck on.
+# Reset before deciding whether the API is on this start (declarative toggle,
+# see docker-entrypoint-common.sh): only ANGIE_STATUS_API_ENABLED sets the
+# listener.
 reset_httpconf 070-status-api.conf
 
 case "${ANGIE_STATUS_API_ENABLED}" in
@@ -38,9 +36,26 @@ case "$ANGIE_STATUS_API_PORT" in
   ngx_err "ANGIE_STATUS_API_PORT must be a decimal port number, got: $ANGIE_STATUS_API_PORT"
   exit 1
   ;;
+# Length is cut before arithmetic: `[ -lt ]` cannot compare a number wider
+# than the machine word, prints `out of range`, treats the test as false, and
+# the value would slip past the range check.
+??????*)
+  ngx_err "ANGIE_STATUS_API_PORT out of range 1-65535: $ANGIE_STATUS_API_PORT"
+  exit 1
+  ;;
 esac
 if [ "$ANGIE_STATUS_API_PORT" -lt 1 ] || [ "$ANGIE_STATUS_API_PORT" -gt 65535 ]; then
   ngx_err "ANGIE_STATUS_API_PORT out of range 1-65535: $ANGIE_STATUS_API_PORT"
+  exit 1
+fi
+
+# Sharing the built-in listener port is rejected, not configured: on one socket
+# the Status API's server_name becomes an entry point, a request with that Host
+# matches by exact name, bypasses the catch-all's `return 444` and exposes
+# /status/ and /metrics. Listeners from /etc/angie/custom are not visible here,
+# so only the built-in port is covered.
+if [ "$ANGIE_STATUS_API_PORT" -eq "$ANGIE_HTTP_PORT" ]; then
+  ngx_err "ANGIE_STATUS_API_PORT must not be ${ANGIE_HTTP_PORT}: the public listener shares that port and would expose the Status API"
   exit 1
 fi
 

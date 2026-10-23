@@ -11,6 +11,8 @@
 - [Цели Makefile](#цели-makefile)
 - [Entrypoint и порядок выполнения](#entrypoint-и-порядок-выполнения)
 - [Инспекция эффективной конфигурации](#инспекция-эффективной-конфигурации)
+- [Применение правки конфигурации](#применение-правки-конфигурации)
+- [Переход с изменяемой раскладки `/etc/angie`](#переход-с-изменяемой-раскладки-etcangie)
 - [Логи](#логи)
 - [Fail-fast при ошибках entrypoint](#fail-fast-при-ошибках-entrypoint)
 
@@ -44,6 +46,7 @@ docker exec angie wget -qO- http://127.0.0.1/healthz   # вернёт: ok
 
 ```sh
 docker run -d \
+  --read-only --tmpfs /data:mode=1777 \
   -p 80:80 \
   -e ANGIE_BROTLI_ENABLED=1 \
   -e ANGIE_GZIP_ENABLED=1 \
@@ -62,11 +65,13 @@ docker run -d \
 ### Rootless-вариант (unprivileged)
 
 Варианты с суффиксом `-unprivileged` не требуют никаких привилегий. Слушатель
-перенесён на порт 8080 (`CAP_NET_BIND_SERVICE` не нужен), pid-файл и временные
-пути перенесены в `/tmp/angie`.
+перенесён на порт 8080 (`CAP_NET_BIND_SERVICE` не нужен). Как и обычный образ,
+он использует `/data/conf` для рабочей конфигурации и `/data/tmp` для временных
+файлов; pid-файла нет.
 
 ```sh
 docker run -d \
+  --read-only --tmpfs /data:mode=1777 \
   -p 8080:8080 \
   -e ANGIE_BROTLI_ENABLED=1 \
   -v /путь/к/моей/конфигурации:/etc/angie/custom:ro \
@@ -80,9 +85,9 @@ UID по умолчанию внутри образа - `65532` (distroless "non
 docker run --user 1000:1000 -p 8080:8080 6run0/angie:alpine-unprivileged
 ```
 
-Если UID, под которым запущен контейнер, не владеет директориями активации,
-entrypoint-скрипты используют конфигурацию, запечённую на этапе сборки, и
-записывают предупреждение - контейнер всё равно запускается.
+Непривилегированный образ работает под любым UID. `/data` должен быть доступен
+ему для записи; свежий tmpfs с `mode=1777` удовлетворяет условию. Постоянный
+`/data/conf`, созданный другим UID, не перезаписывается, а вызывает отказ.
 
 Стандартный (не-unprivileged) образ требует root и отказывается запускаться
 под `--user`, выводя понятное сообщение об ошибке вместо аварийного завершения
@@ -96,30 +101,23 @@ entrypoint-скрипты используют конфигурацию, зап�
 
 ### Базовые образы Alpine и Debian
 
+У каждого Dockerfile две конечные цели: `standard` (root-мастер, порт 80) и
+`unprivileged` (порт 8080, см. ниже). Сборка без `--target` даёт `standard`.
+
 ```sh
-docker build -t angie-alpine -f alpine/Dockerfile .
-docker build -t angie-debian -f debian/Dockerfile .
+docker build --target standard -t angie-alpine -f alpine/Dockerfile .
+docker build --target standard -t angie-debian -f debian/Dockerfile .
 ```
 
-### Rootless-наложения
+### Rootless-цели
 
-Unprivileged-образы строятся поверх соответствующего базового образа.
-Локальный тег базового образа передаётся через `--build-arg BASE_IMAGE`:
+Unprivileged-образы собираются из цели `unprivileged` того же Dockerfile. Обе
+цели делят стадию `runtime`, поэтому вторая сборка берёт слои с пакетами и
+конфигурацией из кеша сборки, и собирать что-то заранее не нужно:
 
 ```sh
-# Alpine rootless (базовый образ должен быть собран первым)
-docker build \
-  -f alpine/Dockerfile.unprivileged \
-  --build-arg BASE_IMAGE=angie-alpine \
-  -t angie-alpine-unprivileged \
-  .
-
-# Debian rootless
-docker build \
-  -f debian/Dockerfile.unprivileged \
-  --build-arg BASE_IMAGE=angie-debian \
-  -t angie-debian-unprivileged \
-  .
+docker build --target unprivileged -t angie-alpine-unprivileged -f alpine/Dockerfile .
+docker build --target unprivileged -t angie-debian-unprivileged -f debian/Dockerfile .
 ```
 
 Дополнительные build-аргументы (`APP_USER`, `APP_GROUP`, `APP_UID`,
@@ -151,7 +149,7 @@ make build-debian-unprivileged
 | `help` | Показать все доступные цели |
 | **Линтеры** | |
 | `lint` | Запустить все линтеры |
-| `lint-shell` | `shellcheck` для entrypoint-скриптов (POSIX sh) и `test/*.sh` (bash) |
+| `lint-shell` | `shellcheck` для entrypoint-скриптов, утилит и тестов (POSIX sh) |
 | `lint-docker` | `hadolint` для всех четырёх Dockerfile |
 | `lint-config` | Проверка безопасности `gixy` для отдельных фрагментов vhost |
 | `lint-config-full` | `gixy` для полной эффективной конфигурации (требует собранного `angie-alpine`) |
@@ -163,7 +161,8 @@ make build-debian-unprivileged
 | `build-alpine-unprivileged` | Собрать rootless-образ Alpine (зависит от `build-alpine`) |
 | `build-debian-unprivileged` | Собрать rootless-образ Debian (зависит от `build-debian`) |
 | **Тесты** | |
-| `test` | Smoke-тестирование всех четырёх образов |
+| `test` | Тесты утилиты и оба smoke-набора для всех четырёх образов |
+| `test-unit` | Проверка встроенного `angie-ctl` без Docker |
 | `test-alpine` | Сборка и smoke-тест образа Alpine |
 | `test-debian` | Сборка и smoke-тест образа Debian |
 | `test-alpine-unprivileged` | Сборка и smoke-тест rootless-образа Alpine |
@@ -194,7 +193,8 @@ smoke-тесты с монтированием фикстур проходят �
 Цепочка запуска:
 
 ```text
-tini -- /docker-entrypoint.sh  [CMD: angie -g 'daemon off;']
+tini -- /docker-entrypoint.sh \
+  [CMD: angie -p /data/conf -c angie.conf -g 'daemon off;']
 ```
 
 `tini` выступает как PID 1: собирает зомби-процессы и перенаправляет сигналы
@@ -202,9 +202,8 @@ tini -- /docker-entrypoint.sh  [CMD: angie -g 'daemon off;']
 
 ### Фаза конфигурации
 
-`docker-entrypoint.sh` источникует `docker-entrypoint-common.sh` (функции
-логирования, `is_root`, `skip_toggle_unless_writable`, хелперы
-`enable_log`/`enable_log_format`) и проверяет первый аргумент:
+`docker-entrypoint.sh` подключает `docker-entrypoint-common.sh` (логирование,
+рабочие пути и хелперы активации) и проверяет первый аргумент:
 
 - Если `$1` равен `angie` или `angie-debug` - фаза конфигурации выполняется.
 - Для любой другой команды (например, `sh`) фаза пропускается и сразу
@@ -227,8 +226,10 @@ tini -- /docker-entrypoint.sh  [CMD: angie -g 'daemon off;']
 
 | Диапазон | Назначение |
 |---|---|
+| `10-*` | Пересборка `/data/conf` из неизменяемого шаблона |
 | `30-*` | Системная настройка (например, автонастройка `worker_processes`) |
-| `40-*` | Тумблеры функций (gzip, brotli, формат логов, WAF, subs, websocket-карта) |
+| `40-*` | Тумблеры, включая ACME, Console, сжатие, логи и модули |
+| `45-*` / `46-*` | Заголовки безопасности, HSTS и CORS для ресурсов |
 | `50-*` | Настройка GeoIP2 (валидация пути, рендеринг конфигурации, активация модуля) |
 | `90-*` | Исправление прав доступа |
 
@@ -255,15 +256,51 @@ esac
 
 ## Инспекция эффективной конфигурации
 
-После запуска контейнера можно получить полностью разрешённую конфигурацию
-Angie (все `include` раскрыты, комментарии удалены):
+После запуска проверяйте и выводите рабочую конфигурацию с явным префиксом:
 
 ```sh
-docker exec <container> angie -T
+docker exec <container> angie -p /data/conf -c angie.conf -t
+docker exec <container> angie -p /data/conf -c angie.conf -T
 ```
 
-Именно так работает `make lint-config-full`: запускается временный контейнер,
-опрашивается `angie -T` до успеха, вывод захватывается и передаётся в `gixy`.
+Wrapper `/usr/local/bin/angie-runtime` передаёт эти параметры встроенным
+проверкам и скриптам. В операционных процедурах используйте явную форму, чтобы
+не было неоднозначности, какое дерево проверяется.
+
+## Применение правки конфигурации
+
+Пользовательский том остаётся в `/etc/angie/custom`, поэтому изменение его
+файлов не требует пересоздавать контейнер. Проверьте конфигурацию и отправьте
+сигнал контейнеру:
+
+```sh
+docker exec angie angie -p /data/conf -c angie.conf -t
+docker kill -s HUP angie
+```
+
+`angie -s reload` не поддерживается: образ использует `pid off`. Переменные
+окружения закреплены в описании контейнера; после их правки пересоздайте
+контейнер, а не отправляйте HUP.
+
+Внутри контейнера работает и `angie-ctl --reload`: образ задаёт
+`ANGIE_RELOAD_CMD="kill -HUP 1"`, а tini (PID 1) пересылает сигнал мастеру.
+Включённый так сниппет действует до следующего старта: тот пересобирает
+`/data/conf` из образца и переменных окружения.
+
+## Переход с изменяемой раскладки `/etc/angie`
+
+Новая раскладка несовместима с подключениями сгенерированной конфигурации и
+временных каталогов напрямую:
+
+1. Оставьте свои файлы в `/etc/angie/custom/{conf.d,http-conf.d,http.d}`.
+2. Уберите тома `/etc/angie`, `/etc/angie/*.d`, `/run/angie.pid`, `/tmp/angie`
+   и `/var/cache/angie`, которые требовались только для записи.
+3. Подключите один записываемый `/data`: tmpfs для stateless-сценария,
+   постоянный том для ACME или дискового кеша.
+4. Обновите команды проверки и reload на явный префикс и HUP выше.
+
+Не сохраняйте `/data/conf`: entrypoint пересобирает его из нового образа при
+каждом старте, чтобы обновлённые умолчания попадали в существующие развёртывания.
 
 ---
 
@@ -274,8 +311,8 @@ docker exec <container> angie -T
 Angie пишет логи доступа и ошибок в `stdout`/`stderr`, и Docker-драйвер логов
 захватывает их без дополнительной настройки.
 
-Формат логов доступа по умолчанию - `logfmt`. Полный список доступных
-форматов (`main`, `logfmt`, `logfmt-with-geoip2`, `extended`, `matomo`) и
+Формат логов доступа по умолчанию - структурированный JSON. Полный список
+форматов (`main`, `json`, `logfmt`, варианты GeoIP2, `extended`, `matomo`) и
 соответствующих переменных `ANGIE_LOG_*` приведён в
 [configuration.ru.md](configuration.ru.md).
 
@@ -293,8 +330,8 @@ Angie пишет логи доступа и ошибок в `stdout`/`stderr`, �
 - `ANGIE_ENTRYPOINT_QUIET_LOGS` задан любым непустым значением: дескриптор 3
   указывает на `/dev/null` - сообщения entrypoint подавляются.
 
-Все функции логирования entrypoint (`ngx_err`, `ngx_warning`, `ngx_notice`,
-`ngx_info`) пишут в дескриптор 3 в формате:
+По умолчанию все функции логирования entrypoint пишут JSON, один объект на
+строку. `ANGIE_ERROR_LOG_JSON_ENABLED=no` возвращает текстовый формат:
 
 ```text
 YYYY/MM/DD HH:MM:SS [level] <pid>: entrypoint: <message>

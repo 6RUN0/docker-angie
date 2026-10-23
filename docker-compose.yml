@@ -16,12 +16,14 @@ x-build-alpine: &build-alpine
   build:
     context: .
     dockerfile: ./alpine/Dockerfile
+    target: standard
 
 x-build-debian: &build-debian
   image: "angie-debian"
   build:
     context: .
     dockerfile: ./debian/Dockerfile
+    target: standard
 
 networks:
   front:
@@ -52,6 +54,9 @@ services:
     container_name: angie-alpine
     hostname: angie-alpine
     restart: always
+    read_only: true
+    tmpfs:
+      - /data:mode=1777
     environment:
       ANGIE_ENTRYPOINT_WORKER_PROCESSES_AUTOTUNE: 1
       ANGIE_GZIP_ENABLED: 1
@@ -71,6 +76,9 @@ services:
     container_name: angie-debian
     hostname: angie-debian
     restart: always
+    read_only: true
+    tmpfs:
+      - /data:mode=1777
     environment:
       ANGIE_ENTRYPOINT_WORKER_PROCESSES_AUTOTUNE: 1
       ANGIE_GZIP_ENABLED: 1

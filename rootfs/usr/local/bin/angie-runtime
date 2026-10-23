@@ -1,0 +1,3 @@
+#!/bin/sh
+# angie-ctl invokes ANGIE_BIN with -t; validate the live tree, not the skeleton.
+exec /usr/sbin/angie -p /data/conf -c angie.conf "$@"

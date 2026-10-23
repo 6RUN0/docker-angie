@@ -2,15 +2,12 @@
 
 . /docker-entrypoint-common.sh
 
-skip_toggle_unless_writable
-
 : "${ANGIE_BROTLI_ENABLED:=no}"
 : "${ANGIE_BROTLI_STATIC_ENABLED:=no}"
 
-# Reset brotli before re-enabling per env, so disabling it (clearing the
-# ANGIE_BROTLI_* variables) actually takes effect on a persistent /etc/angie
-# volume instead of leaving an orphaned `brotli on;` whose module might no longer
-# be loaded. Disable the config (consumer of the module directives) before the
+# Reset brotli before re-enabling per env (declarative toggle, see
+# docker-entrypoint-common.sh), so no orphaned `brotli on;` outlives its
+# module. Disable the config (consumer of the module directives) before the
 # module itself.
 reset_httpconf 021-brotli_static.conf 020-brotli.conf
 reset_module http_brotli_static.conf http_brotli_filter.conf

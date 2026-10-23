@@ -6,16 +6,62 @@ else
   exec 3>/dev/null
 fi
 
+# One toggle sets the format of both angie's error_log (31-error-log-json.sh)
+# and the entrypoint's own lines: both write to the container's stderr, and a
+# log collector parses a mixed-format stream only by half. The default lives
+# here because every script sources this file and 31- does not run first.
+: "${ANGIE_ERROR_LOG_JSON_ENABLED:=yes}"
+case "${ANGIE_ERROR_LOG_JSON_ENABLED}" in
+yes | on | 1 | true | enable | enabled) ngx_log_json=yes ;;
+*) ngx_log_json= ;;
+esac
+
+# One JSON line in angie's `error_log ... format=json` schema: same keys in the
+# same order, `tags` tells entrypoint lines from server lines. No milliseconds:
+# busybox date has no %N and silently truncates the format there.
+#
+# The message arrives on stdin, not via -v: -v expands backslashes, and
+# messages carry values from the consumer's environment. Escaping walks the
+# string per character instead of gsub, whose backslash handling differs
+# between busybox awk, mawk (Debian) and gawk. Newlines are joined per record:
+# per-character concatenation of one long string is quadratic in busybox awk.
+ngx_log_json_line() {
+  printf '%s' "$4" | awk -v time="$1" -v level="$2" -v pid="$3" '
+    BEGIN {
+      for (i = 1; i < 32; i++) esc[sprintf("%c", i)] = sprintf("\\u%04x", i)
+      esc["\r"] = "\\r"; esc["\t"] = "\\t"
+      esc["\""] = "\\\""; esc["\\"] = "\\\\"
+    }
+    {
+      line = ""
+      n = length($0)
+      for (i = 1; i <= n; i++) {
+        c = substr($0, i, 1)
+        line = line ((c in esc) ? esc[c] : c)
+      }
+      out = (NR > 1) ? out "\\n" line : line
+    }
+    END {
+      printf "{\"time\":\"%s\",\"level\":\"%s\",\"pid\":%s,\"message\":\"%s\",\"tags\":[\"entrypoint\"]}\n", time, level, pid, out
+    }'
+}
+
+# Level names match angie's in both formats (error and warn, not err and
+# warning), so a search by level matches server and entrypoint lines alike.
 ngx_log() {
   __type="$1"
   shift
-  printf '%s [%s] %s: entrypoint: %s\n' "$(date +'%Y/%m/%d %H:%M:%S')" "$__type" "$$" "$*" >&3
+  if [ -n "$ngx_log_json" ]; then
+    ngx_log_json_line "$(date -u +'%Y-%m-%dT%H:%M:%SZ')" "$__type" "$$" "$*" >&3
+  else
+    printf '%s [%s] %s: entrypoint: %s\n' "$(date +'%Y/%m/%d %H:%M:%S')" "$__type" "$$" "$*" >&3
+  fi
 }
 ngx_err() {
-  ngx_log err "$@"
+  ngx_log error "$@"
 }
 ngx_warning() {
-  ngx_log warning "$@"
+  ngx_log warn "$@"
 }
 ngx_notice() {
   ngx_log notice "$@"
@@ -24,55 +70,70 @@ ngx_info() {
   ngx_log info "$@"
 }
 
-# True when the entrypoint runs as root. Privileged setup steps (chown, editing
-# angie.conf) are skipped otherwise so the image works under `docker run --user`.
-is_root() {
-  [ "$(id -u)" = 0 ]
-}
+# The only writable location in the container. Everything changed at runtime
+# lives below it, so hardening comes down to one mount: the live config tree (a
+# copy of the shipped one, see 10-conf-overlay.sh) and angie's temp files. A
+# proxy cache placed here too keeps the temp-to-cache `rename()` on one
+# filesystem.
+ANGIE_DATA_DIR="/data"
 
-# Feature-toggle scripts shell out to angie-ctl (which symlinks into
-# /etc/angie/{http-conf,modules}.d) and render into http-conf-available.d. The
-# default image owns those as root; the unprivileged image chowns them to the
-# angie user at build time, so its default runtime uid can toggle features. A
-# foreign `docker run --user <uid>` that does not own them cannot write there:
-# warn and skip gracefully (the baked build-time config still serves) instead of
-# letting angie-ctl's EACCES abort the fail-fast startup. Keying on writability
-# rather than uid keeps the same path correct for root, for the angie user, and
-# for an arbitrary uid alike.
-skip_toggle_unless_writable() {
-  if [ -w /etc/angie/http-conf.d ] &&
-    [ -w /etc/angie/modules.d ] &&
-    [ -w /etc/angie/http-conf-available.d ]; then
-    return 0
-  fi
-  ngx_warning "$(basename "$0"): config dirs not writable by uid $(id -u); runtime toggling unavailable, using build-time config. The declarative reset also does not run, so a feature enabled by a prior run on a persistent /etc/angie volume stays active -- including a stale real-ip trusted-proxy list, which can let a client spoof \$remote_addr. Recreate the /etc/angie volume or run with a uid that owns the config dirs."
-  exit 0
-}
+# The live config tree. The shipped /etc/angie is never edited and serves only
+# as the skeleton for this copy.
+ANGIE_CONF_DIR="$ANGIE_DATA_DIR/conf"
+
+# Keep all Angie-created temporary files on the writable data mount. The value
+# is duplicated by the *_temp_path directives in 010-common.conf: angie config
+# cannot read shell variables, so only this comment ties the two together.
+# shellcheck disable=SC2034 # Used by 10-conf-overlay.sh after sourcing this file.
+ANGIE_TMP_DIR="$ANGIE_DATA_DIR/tmp"
+
+# Port of the built-in listener: the root image binds the privileged :80, the
+# unprivileged one cannot and uses :8080. Exported for the toggle scripts that
+# compare consumer ports against it.
+if [ -n "${ANGIE_UNPRIVILEGED:-}" ]; then
+  ANGIE_HTTP_PORT=8080
+else
+  ANGIE_HTTP_PORT=80
+fi
+export ANGIE_HTTP_PORT
+
+# angie-ctl takes the tree root from here, so its activation symlinks land in
+# the live copy rather than the shipped skeleton. Exported because angie-ctl is
+# a separate process.
+export ANGIE_ETC="$ANGIE_CONF_DIR"
 
 # Directory holding the shippable (disabled-by-default) http-conf snippets.
-HTTP_CONF_AVAILABLE_DIR="/etc/angie/http-conf-available.d"
+HTTP_CONF_AVAILABLE_DIR="$ANGIE_CONF_DIR/http-conf-available.d"
 
-# Every entrypoint config mutation goes through this wrapper. angie-ctl runs no
-# config test of its own (upstream removed the per-call `angie -t`, and with it
-# the --no-test flag -- passing the flag now fails as an unknown type), so no
-# single en/dis runs `angie -t`. The entrypoint validates the assembled config
+# Every entrypoint config mutation goes through this wrapper. --no-test skips
+# angie-ctl's per-call `angie -t`; the entrypoint validates the assembled config
 # once at the very end (see docker-entrypoint.sh). This removes an ordering
-# trap: angie validates the variables of EVERY declared log_format (and every
-# directive) on each `angie -t`, so while one toggle enables its snippet, an
-# orphan from another feature not yet reset this run (e.g. a geoip2 log format
-# outliving geoip2 on a persistent /etc/angie volume) would otherwise poison
-# that intermediate test and abort startup at an unrelated, earlier script. With
-# validation deferred, only the final, fully-reset state is ever tested.
+# trap: angie validates the variables of EVERY declared log_format on each
+# `angie -t`, so while one toggle enables its snippet, an orphan from another
+# feature not yet reset this run would poison that intermediate test and abort
+# startup at an unrelated, earlier script.
+#
+# angie-ctl's stdout ("Enabled http-conf: ...") is plain text amid JSON in
+# `docker logs`, and ngx_info reports each change anyway; its errors go to
+# stderr and stay visible.
 ngx_ctl() {
-  angie-ctl "$@"
+  angie-ctl --no-test "$@" >/dev/null
+}
+
+# True when the entrypoint runs as root. Privileged setup steps (chown, the
+# root-only listener and temp-dir checks) are skipped otherwise so the image
+# works under `docker run --user`.
+is_root() {
+  [ "$(id -u)" -eq 0 ]
 }
 
 # Feature toggles are declarative: each NN-*.sh resets the snippets/modules it
 # owns at the start of every run, then re-enables only what the current
-# environment asks for. Without this, toggles would be enable-only -- a feature
-# enabled on a prior run survives as an orphaned symlink on a persistent
-# /etc/angie volume, so removing its ANGIE_* variable could not turn it off.
-# These reset helpers centralise that "disable then conditionally enable"
+# environment asks for. Two reasons, both within a single run: the skeleton
+# ships the json log pair enabled (see Dockerfile), so picking another format
+# would add a second access_log instead of replacing it; and a later toggle must
+# cleanly override an earlier one (50-geoip2 over 40-log) instead of stacking
+# on it. These helpers centralise that "disable then conditionally enable"
 # pattern.
 #
 # `reset_httpconf` takes basenames or shell globs matched against the available
@@ -108,9 +169,7 @@ enable_log() {
   # parses, so two enabled 040-log-* snippets log each request twice. Disable
   # the whole group first, discovered by the 040-log-* naming convention rather
   # than a hand-kept list, so a new format snippet joins the group automatically
-  # and can never drift out of sync. This also keeps selection idempotent across
-  # restarts and lets a later script (e.g. 50-geoip2) override an earlier default
-  # (40-log) cleanly instead of stacking a second access_log directive.
+  # and can never drift out of sync.
   reset_httpconf '040-log-*.conf'
   ngx_ctl httpconf en "040-log-$1.conf" &&
     ngx_info "Use $1 format for access log"

@@ -10,6 +10,115 @@ itself. The build number increments when the same Angie version is repackaged
 
 ## [Unreleased]
 
+### Added
+
+- Added the same runtime feature set to the standard and unprivileged Alpine
+  and Debian images: ACME, Console Light 1.9.0, UTF-8 charset, content-type
+  expiry maps, open-file caching, HSTS, asset CORS, JSON/GeoIP2 access logs,
+  reusable server/location snippets, and a configurable graceful worker
+  shutdown timeout (default `8s`). Error, access, and entrypoint logs now use
+  JSON by default.
+- Both image variants now support a read-only root filesystem with one writable
+  `/data` mount. The immutable skeleton remains under `/etc/angie`; the
+  entrypoint assembles `/data/conf` and uses `/data/tmp` at every start.
+
+### Changed
+
+- **BREAKING:** `alpine/Dockerfile.unprivileged` and
+  `debian/Dockerfile.unprivileged` are removed. Build the unprivileged image
+  from the same Dockerfile with
+  `docker build --target unprivileged -f alpine/Dockerfile .` (or
+  `debian/Dockerfile`); `--build-arg BASE_IMAGE` is gone. A build without
+  `--target` still yields the standard image. The unprivileged image exposes
+  only `8080/tcp`, no longer `80/tcp` as well, and its
+  `org.opencontainers.image.base.name` names the Alpine or Debian base, not the
+  Angie image.
+- **BREAKING:** generated configuration and temporary paths moved to `/data`.
+  Keep consumer files under `/etc/angie/custom`, mount `/data` rather than
+  `/data/conf`, validate with
+  `angie -p /data/conf -c angie.conf -t`, and reload with
+  `docker kill -s HUP <container>`. `angie -s reload` is unavailable because
+  the image uses `pid off`.
+- Standard images retain a root master, `angie` workers, and port 80;
+  unprivileged images retain port 8080, uid/gid 65532, and arbitrary-UID
+  support. Both now use the same runtime layout and toggles.
+- `angie-ctl` is vendored in the image and tests the live tree through
+  `ANGIE_BIN=/usr/local/bin/angie-runtime`; activation targets
+  `ANGIE_ETC=/data/conf`. Entrypoint activation uses `--no-test` followed by one
+  final configuration check. `angie-ctl --reload` sends HUP to pid 1
+  (`ANGIE_RELOAD_CMD="kill -HUP 1"`), which tini forwards to the master.
+- **BREAKING:** `/etc/angie` is a read-only skeleton: the entrypoint never
+  edits it, and angie serves the copy in `/data/conf`. Changes made in
+  `/etc/angie` inside a running container are not served; use
+  `/etc/angie/custom` or `angie-ctl` on the live tree. `/data` must be
+  writable: with `--read-only` and no `/data` mount the start fails with exit
+  code 1 and a message naming the mount to add.
+- **BREAKING:** the image's log formats are renamed `angie_main`,
+  `angie_extended`, `angie_logfmt`, `angie_logfmt_with_geoip` and
+  `angie_matomo` (new: `angie_json`, `angie_json_with_geoip`). A consumer
+  `access_log ... main;` fails the startup check with
+  `unknown log format "main"`; switch to the `angie_` name or declare your own
+  `log_format` under a name the image does not use.
+- **BREAKING:** variables the image declares carry the `$_stock_` prefix:
+  `$connection_upgrade`, `$loopback` and `$geoip2_country_code` are now
+  `$_stock_connection_upgrade`, `$_stock_loopback` and
+  `$_stock_geoip2_country_code`. A consumer config using an old name fails the
+  startup check with `unknown "connection_upgrade" variable` (and likewise);
+  declare your own `map` or switch to the new name. The prefix keeps a
+  consumer `map`/`geo` of the same name from silently replacing the image's.
+- `docker stop` is graceful: `STOPSIGNAL SIGQUIT` lets angie finish open
+  requests instead of cutting them (`SIGTERM`). Open connections are closed
+  after `worker_shutdown_timeout` (`ANGIE_WORKER_SHUTDOWN_TIMEOUT`, default
+  `8s`, below docker's 10 s `stop_grace_period`), so a stop with long-lived
+  connections takes up to that long; `docker kill -s TERM <container>` stops
+  at once.
+- The built-in catch-all vhost no longer carries `default_server`; it stays the
+  default by include order, and both `custom/http-conf.d` and `custom/http.d`
+  are now included after the image's `http.d`. A consumer can declare
+  `listen 80 default_server` (`8080` in the unprivileged image) in
+  `custom/http.d` without `a duplicate default server`; a `server {}` in
+  `custom/http-conf.d` no longer takes the default silently.
+- `ANGIE_STATUS_API_PORT` equal to the built-in listener port (80, or 8080 in
+  the unprivileged image) is refused at startup with exit code 1: on a shared
+  socket a request with the status server's name would bypass the catch-all
+  `444` and reach `/status/` and `/metrics`.
+- The Alpine base moves from `alpine:3.22` to `alpine:3.24`; both bases are
+  pinned by digest (`ALPINE_BASE_IMAGE`, `DEBIAN_BASE_IMAGE`). Package mirrors
+  are build arguments (`ALPINE_MIRROR`, `DEBIAN_MIRROR`,
+  `DEBIAN_SECURITY_MIRROR`, `ANGIE_MIRROR`).
+
+### Removed
+
+- `VOLUME /etc/angie/custom`: a `docker run` without its own mount no longer
+  creates an anonymous volume per container. Mount `/etc/angie/custom`
+  explicitly when you use it.
+
+### Security
+
+- Entrypoint startup refuses to overwrite an unmarked non-empty `/data/conf` or
+  one owned by a different UID. Console Light requires a long secret path and,
+  by default, a readable htpasswd file. ACME keys and certificates live under
+  `/data/acme`; deployments using ACME must use persistent storage rather than
+  tmpfs.
+- In the standard image `/data` and `/data/tmp` are `root:root 0755`, and
+  every start empties `/data/tmp` and resets it to `root:root 0755`: the root
+  master chowns temp paths to the worker following links, and a
+  worker-writable parent would let a compromised worker redirect that chown to
+  a root file. Only the unprivileged image keeps `/data` and `/data/tmp` at
+  `1777`.
+- Startup refuses a symbolic link at `/data/conf`, `/data/tmp` or
+  `/data/acme`, so cleanup and ACME keys never follow a planted link out of
+  the data mount. The writability check of `/data` creates its probe file with
+  `mktemp` instead of a predictable name.
+- `ANGIE_ACME_DIRECTORY` must be an `https://` URL; any other value is refused
+  at startup with exit code 1.
+- The build checks the Angie signing key against `ANGIE_SIGNING_KEY_SHA256`
+  before trusting it, and restricts the Angie repository to Angie's own
+  packages (an `@angie` repository tag on Alpine, an APT origin pin on
+  Debian), so it cannot replace base distribution packages. Setuid and setgid
+  bits are cleared on every file in the image: `su` and `passwd` no longer
+  raise the privileges of a non-root process.
+
 ## [1.12.4-build1] - 2026-10-20
 
 ### Changed

@@ -22,8 +22,11 @@ or [`webserver-llc/angie` releases](https://github.com/webserver-llc/angie/relea
   fuzzy `=~${ANGIE_VERSION}` apk operator).
 - `debian/Dockerfile` - `ARG ANGIE_VERSION=` (the build resolves the exact apt
   package version matching it).
-- Keep both Dockerfiles in sync. The `angie-ctl` pin (`ANGIE_CTL_COMMIT`) is
-  independent of the Angie version - bump it only when intended.
+- Keep both Dockerfiles in sync. `angie-ctl` is vendored at
+  `rootfs/usr/local/bin/angie-ctl`; when updating it, manually review the
+  source revision, run its tests, refresh the SHA-256 recorded in
+  `configuration.md`, and add a changelog entry. The automated upstream check
+  monitors Angie, not the vendored helper.
 
 ## 3. Actualize the docs that hard-code the tag
 

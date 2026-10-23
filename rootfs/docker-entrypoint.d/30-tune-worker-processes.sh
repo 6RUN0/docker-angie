@@ -6,13 +6,6 @@ export LC_ALL=C
 ME=$(basename "$0")
 PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
-[ "${ANGIE_ENTRYPOINT_WORKER_PROCESSES_AUTOTUNE:-}" ] || exit 0
-
-touch /etc/angie/angie.conf 2>/dev/null || {
-  ngx_err "can not modify /etc/angie/angie.conf (read-only file system?)"
-  exit 0
-}
-
 ceildiv() {
   num=$1
   div=$2
@@ -27,8 +20,8 @@ get_cpuset() {
   for token in $(tr ',' ' ' <"$cpusetroot/$cpusetfile"); do
     case "$token" in
     *-*)
-      # Inclusive range "start-end"; count without spawning seq (avoids the
-      # word-splitting the unquoted command substitution otherwise relied on).
+      # Inclusive range "start-end"; count with arithmetic, without spawning
+      # seq or relying on word splitting.
       ncpu=$((ncpu + ${token#*-} - ${token%-*} + 1))
       ;;
     *)
@@ -36,6 +29,11 @@ get_cpuset() {
       ;;
     esac
   done
+  # Same guard as get_quota and get_quota_v2: the minimum of the candidates is
+  # taken below, so a non-positive value would win and yield
+  # `worker_processes 0;`, which `angie -t` accepts and the master runs with no
+  # workers at all. Hardening against input the kernel does not produce.
+  [ "$ncpu" -gt 0 ] || return 1
   echo "$ncpu"
 }
 
@@ -66,135 +64,137 @@ get_quota_v2() {
   echo "$ncpu"
 }
 
-get_cgroup_v1_path() {
-  needle=$1
-  found=
-  foundroot=
-  mountpoint=
-
-  [ -r "/proc/self/mountinfo" ] || return 1
-  [ -r "/proc/self/cgroup" ] || return 1
-
-  while IFS= read -r line; do
-    case "$needle" in
-    "cpuset")
-      case "$line" in
-      *cpuset*)
-        found=$(echo "$line" | cut -d ' ' -f 4,5)
-        break
-        ;;
-      esac
-      ;;
-    "cpu")
-      case "$line" in
-      *cpuset*) ;;
-      *cpu,cpuacct* | *cpuacct,cpu | *cpuacct* | *cpu*)
-        found=$(echo "$line" | cut -d ' ' -f 4,5)
-        break
-        ;;
-      esac
+# cgroup parsing reads two /proc files, both passed as parameters so the test
+# suite can run these functions on fixtures: a v1 hierarchy cannot be
+# reproduced on a v2 host, and /proc/self cannot be replaced in a container.
+#
+# A mountinfo line: `id parent maj:min root mountpoint options ... - type
+# source superoptions`. v1 controllers are comma-separated in the superoptions
+# (`rw,cpu,cpuacct`) and are matched there, not as a substring of the whole
+# line: a named hierarchy's mountpoint (`name=systemd`) may contain anything.
+# Splitting on spaces is safe, the kernel prints a space in a path as \040.
+#
+# Prints `root mountpoint` of the v1 hierarchy carrying controller $1.
+find_cgroup_v1_mount() { # controller mountinfo
+  [ -r "$2" ] || return 1
+  while read -r _ _ _ root mountpoint rest; do
+    case " $rest " in
+    *' - cgroup '*) ;;
+    *) continue ;;
+    esac
+    case ",${rest##* }," in
+    *",$1,"*)
+      echo "$root $mountpoint"
+      return 0
       ;;
     esac
-  done <<__EOF__
-$(grep -F -- '- cgroup ' /proc/self/mountinfo)
-__EOF__
+  done <"$2"
+  return 1
+}
 
-  while IFS= read -r line; do
-    controller=$(echo "$line" | cut -d: -f 2)
-    case "$needle" in
-    "cpuset")
-      case "$controller" in
-      cpuset)
-        mountpoint=$(echo "$line" | cut -d: -f 3)
-        break
-        ;;
-      esac
-      ;;
-    "cpu")
-      case "$controller" in
-      cpu,cpuacct | cpuacct,cpu | cpuacct | cpu)
-        mountpoint=$(echo "$line" | cut -d: -f 3)
-        break
-        ;;
-      esac
+# Prints the task path in the v1 hierarchy with controller $1, an empty line
+# without such a hierarchy. A /proc/self/cgroup line: `id:controllers:path`.
+find_cgroup_v1_path() { # controller cgroupfile
+  [ -r "$2" ] || return 1
+  while IFS=: read -r _ controllers path; do
+    case ",$controllers," in
+    *",$1,"*)
+      echo "$path"
+      return 0
       ;;
     esac
-  done <<__EOF__
-$(grep -F -- 'cpu' /proc/self/cgroup)
-__EOF__
-
-  case "${found%% *}" in
-  "/")
-    foundroot="${found##* }$mountpoint"
-    ;;
-  "$mountpoint")
-    foundroot="${found##* }"
-    ;;
-  esac
-  echo "$foundroot"
+  done <"$2"
+  echo
 }
 
-get_cgroup_v2_path() {
+# Prints `root mountpoint` of the unified v2 hierarchy, the last one found; the
+# task path in it is the last `0::path` line.
+find_cgroup_v2_mount() { # mountinfo
+  [ -r "$1" ] || return 1
   found=
-  foundroot=
-  mountpoint=
-
-  [ -r "/proc/self/mountinfo" ] || return 1
-  [ -r "/proc/self/cgroup" ] || return 1
-
-  while IFS= read -r line; do
-    found=$(echo "$line" | cut -d ' ' -f 4,5)
-  done <<__EOF__
-$(grep -F -- '- cgroup2 ' /proc/self/mountinfo)
-__EOF__
-
-  while IFS= read -r line; do
-    mountpoint=$(echo "$line" | cut -d: -f 3)
-  done <<__EOF__
-$(grep -F -- '0::' /proc/self/cgroup)
-__EOF__
-
-  case "${found%% *}" in
-  "")
-    return 1
-    ;;
-  "/")
-    foundroot="${found##* }$mountpoint"
-    ;;
-  "$mountpoint" | /../*)
-    foundroot="${found##* }"
-    ;;
-  esac
-  echo "$foundroot"
+  while read -r _ _ _ root mountpoint rest; do
+    case " $rest " in
+    *' - cgroup2 '*) found="$root $mountpoint" ;;
+    esac
+  done <"$1"
+  [ -n "$found" ] || return 1
+  echo "$found"
 }
 
-ncpu_online=$(getconf _NPROCESSORS_ONLN)
-ncpu_cpuset=
-ncpu_quota=
-ncpu_cpuset_v2=
-ncpu_quota_v2=
+find_cgroup_v2_path() { # cgroupfile
+  [ -r "$1" ] || return 1
+  path=
+  while IFS=: read -r id _ rest; do
+    [ "$id" = 0 ] && path=$rest
+  done <"$1"
+  echo "$path"
+}
 
-cpuset=$(get_cgroup_v1_path "cpuset") && ncpu_cpuset=$(get_cpuset "$cpuset" "cpuset.effective_cpus") || ncpu_cpuset=$ncpu_online
-cpu=$(get_cgroup_v1_path "cpu") && ncpu_quota=$(get_quota "$cpu") || ncpu_quota=$ncpu_online
-cgroup_v2=$(get_cgroup_v2_path) && ncpu_cpuset_v2=$(get_cpuset "$cgroup_v2" "cpuset.cpus.effective") || ncpu_cpuset_v2=$ncpu_online
-cgroup_v2=$(get_cgroup_v2_path) && ncpu_quota_v2=$(get_quota_v2 "$cgroup_v2") || ncpu_quota_v2=$ncpu_online
+get_cgroup_v1_path() { # controller mountinfo cgroupfile
+  mount=$(find_cgroup_v1_mount "$1" "$2") || return 1
+  path=$(find_cgroup_v1_path "$1" "$3") || return 1
+  resolve_cgroup_dir "${mount%% *}" "${mount##* }" "$path"
+}
 
-ncpu=$(printf "%s\n%s\n%s\n%s\n%s\n" \
-  "$ncpu_online" \
-  "$ncpu_cpuset" \
-  "$ncpu_quota" \
-  "$ncpu_cpuset_v2" \
-  "$ncpu_quota_v2" |
-  sort -n |
-  head -n 1)
+get_cgroup_v2_path() { # mountinfo cgroupfile
+  mount=$(find_cgroup_v2_mount "$1") || return 1
+  path=$(find_cgroup_v2_path "$2") || return 1
+  resolve_cgroup_dir "${mount%% *}" "${mount##* }" "$path"
+}
 
-# Skip if already tuned: the regex below matches any line starting with
-# worker_processes, including the one it inserts, so re-running on a persisted
-# writable layer (docker restart) would comment-and-append unboundedly. The
-# sentinel comment makes the rewrite a one-time operation per config file.
-if grep -q '^# Commented out by ' /etc/angie/angie.conf; then
-  ngx_info "worker_processes already tuned, skipping"
-  exit 0
-fi
+# The task's cgroup directory on the filesystem: hierarchy root `/` means the
+# task path lies under the mountpoint; a root equal to the task path means the
+# container got its own cgroup mounted. For v2 a `/../..` root is printed for
+# a cgroup namespace and also means the mountpoint. An empty task path (no
+# cgroup file) with root `/` gives the mountpoint itself.
+resolve_cgroup_dir() { # root mountpoint path
+  case "$1" in
+  /) echo "$2$3" ;;
+  "$3" | /../*) echo "$2" ;;
+  *) return 1 ;;
+  esac
+}
 
-sed -i.bak -r 's/^(worker_processes)(.*)$/# Commented out by '"$ME"' on '"$(date)"'\n#\1\2\n\1 '"$ncpu"';/' /etc/angie/angie.conf
+tune_worker_processes() {
+  [ "${ANGIE_ENTRYPOINT_WORKER_PROCESSES_AUTOTUNE:-}" ] || return 0
+
+  mountinfo=/proc/self/mountinfo
+  cgroupfile=/proc/self/cgroup
+  ncpu_online=$(getconf _NPROCESSORS_ONLN)
+
+  cpuset=$(get_cgroup_v1_path cpuset "$mountinfo" "$cgroupfile") &&
+    ncpu_cpuset=$(get_cpuset "$cpuset" cpuset.effective_cpus) ||
+    ncpu_cpuset=$ncpu_online
+  cpu=$(get_cgroup_v1_path cpu "$mountinfo" "$cgroupfile") &&
+    ncpu_quota=$(get_quota "$cpu") ||
+    ncpu_quota=$ncpu_online
+  if cgroup_v2=$(get_cgroup_v2_path "$mountinfo" "$cgroupfile"); then
+    ncpu_cpuset_v2=$(get_cpuset "$cgroup_v2" cpuset.cpus.effective) || ncpu_cpuset_v2=$ncpu_online
+    ncpu_quota_v2=$(get_quota_v2 "$cgroup_v2") || ncpu_quota_v2=$ncpu_online
+  else
+    ncpu_cpuset_v2=$ncpu_online
+    ncpu_quota_v2=$ncpu_online
+  fi
+
+  ncpu=$(printf "%s\n%s\n%s\n%s\n%s\n" \
+    "$ncpu_online" \
+    "$ncpu_cpuset" \
+    "$ncpu_quota" \
+    "$ncpu_cpuset_v2" \
+    "$ncpu_quota_v2" |
+    sort -n |
+    head -n 1)
+
+  # Edit the live tree: it is copied afresh on every start, so the substitution
+  # always meets the shipped `worker_processes auto;` and never stacks on its
+  # own earlier result. The old line stays commented out next to it, showing in
+  # /data/conf/angie.conf that the toggle set the value.
+  sed -i -r 's/^(worker_processes)(.*)$/# Commented out by '"$ME"' on '"$(date)"'\n#\1\2\n\1 '"$ncpu"';/' "$ANGIE_CONF_DIR/angie.conf"
+}
+
+# The toggle runs only when the file itself is executed. Sourced (`. file`) it
+# just declares the functions, so the suite can test cgroup parsing on fixtures
+# without touching angie.conf.
+case "${0##*/}" in
+30-tune-worker-processes.sh) tune_worker_processes ;;
+esac

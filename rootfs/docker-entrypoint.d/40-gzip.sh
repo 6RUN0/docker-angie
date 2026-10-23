@@ -2,16 +2,12 @@
 
 . /docker-entrypoint-common.sh
 
-skip_toggle_unless_writable
-
 : "${ANGIE_GZIP_ENABLED:=no}"
 : "${ANGIE_GZIP_STATIC_ENABLED:=no}"
 
-# Reset gzip before re-enabling per env, so disabling it (clearing the
-# ANGIE_GZIP_* variables) actually takes effect on a persistent /etc/angie
-# volume instead of leaving the snippet stuck on. gzip is core (no module), so
-# the orphan never breaks `angie -t`; this only fixes the "stuck enabled"
-# behaviour. Static before base.
+# Reset gzip before re-enabling per env (declarative toggle, see
+# docker-entrypoint-common.sh). gzip is core (no module), so an orphan never
+# breaks `angie -t`; this only prevents "stuck enabled". Static before base.
 reset_httpconf 021-gzip_static.conf 020-gzip.conf
 
 enable_gzip() {

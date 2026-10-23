@@ -1,9 +1,8 @@
 name: Upstream check
 
 # Dependabot cannot track the Angie package version (pinned in a RUN via
-# ARG ANGIE_VERSION) nor the angie-ctl git pin (ARG ANGIE_CTL_COMMIT). This
-# workflow fills that gap: weekly it compares the pins against upstream and
-# opens a PR bumping them in both Dockerfiles.
+# ARG ANGIE_VERSION). Compare it weekly and open a PR for both Dockerfiles.
+# The vendored angie-ctl is updated manually with its regression tests.
 
 on:
   schedule:
@@ -28,13 +27,12 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1 # zizmor: ignore[artipacked] (create-pull-request pushes a branch; token not exposed via artifacts)
 
-      - name: Detect upstream Angie and angie-ctl updates
+      - name: Detect upstream Angie updates
         id: detect
         run: |
           set -eu
           # Current pins (alpine and debian are kept in sync; read alpine).
           cur_angie=$(sed -n 's/^ARG ANGIE_VERSION=//p' alpine/Dockerfile | head -1)
-          cur_ctl=$(sed -n 's/^ARG ANGIE_CTL_COMMIT="\(.*\)"$/\1/p' alpine/Dockerfile | head -1)
 
           # Alpine repo branch follows the pinned base image (alpine:X.Y -> vX.Y),
           # mirroring how the Dockerfile derives it from /etc/alpine-release. Kept
@@ -52,11 +50,7 @@ jobs:
           new_angie=$(awk -v RS='' '/(^|\n)P:angie\n/ { for (i = 1; i <= NF; i++) if ($i ~ /^V:/) print substr($i, 3) }' "$work/APKINDEX" \
             | sed 's/-r[0-9]*$//' | sort -V | tail -1)
 
-          # Latest angie-ctl commit on its default branch.
-          new_ctl=$(git ls-remote https://github.com/6RUN0/angie-ctl.git main | cut -f1)
-
           [ -n "$new_angie" ] || { echo "could not determine latest Angie version" >&2; exit 1; }
-          [ -n "$new_ctl" ] || { echo "could not determine latest angie-ctl commit" >&2; exit 1; }
 
           changed=no
           body=$(mktemp)
@@ -66,13 +60,6 @@ jobs:
             printf -- '- Angie: %s -> %s\n' "$cur_angie" "$new_angie" >> "$body"
             for df in alpine/Dockerfile debian/Dockerfile; do
               sed -i "s/^ARG ANGIE_VERSION=.*/ARG ANGIE_VERSION=$new_angie/" "$df"
-            done
-          fi
-          if [ "$new_ctl" != "$cur_ctl" ]; then
-            changed=yes
-            printf -- '- angie-ctl: %.7s -> %.7s\n' "$cur_ctl" "$new_ctl" >> "$body"
-            for df in alpine/Dockerfile debian/Dockerfile; do
-              sed -i "s/^ARG ANGIE_CTL_COMMIT=.*/ARG ANGIE_CTL_COMMIT=\"$new_ctl\"/" "$df"
             done
           fi
           if [ "$new_angie" != "$cur_angie" ]; then
@@ -93,8 +80,8 @@ jobs:
         with:
           branch: chore/upstream-bump
           base: develop
-          title: "chore: bump pinned Angie / angie-ctl to upstream"
+          title: "chore: bump pinned Angie to upstream"
           body-path: ${{ steps.detect.outputs.body_path }}
-          commit-message: "chore: bump pinned Angie/angie-ctl to upstream"
+          commit-message: "chore: bump pinned Angie to upstream"
           delete-branch: true
           labels: dependencies

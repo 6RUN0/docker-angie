@@ -15,20 +15,14 @@ include prometheus_all.conf;
 server {
   listen %%STATUS_API_HOST%%:%%STATUS_API_PORT%%;
 
-  # Metrics scrapes are high-frequency noise in an access log.
-  access_log off;
+  # A name is required, as a second line of defence: a nameless server takes
+  # the empty name, matches requests without a Host header and on a shared
+  # socket would pull /status/ and /metrics past the default server's 444. The
+  # name itself becomes an entry point on a shared socket, which is why
+  # 40-status-api.sh rejects the built-in listener port.
+  server_name status_api;
 
-  location /status/ {
-    api /status/;
-  }
-
-  location = /metrics {
-    prometheus all;
-  }
-
-  # Nothing else is served on this listener; close anything that is not the
-  # API, matching the default vhost's posture.
-  location / {
-    return 444;
-  }
+  # The locations live in snippets/status-api-locations.conf so a consumer
+  # server {} on its own port can include the same set.
+  include snippets/status-api-locations.conf;
 }

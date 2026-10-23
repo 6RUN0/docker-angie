@@ -1,0 +1,40 @@
+# Angie Console Light: static files of the angie-console-light package plus its
+# API. https://en.angie.software/angie/docs/configuration/monitoring/
+# Include inside server {}:
+#   include snippets/console.conf;
+#
+# Rendered at container start by 40-console.sh from ANGIE_CONSOLE_PATH and
+# ANGIE_CONSOLE_HTPASSWD_FILE into snippets/console.conf of the live tree; the
+# built-in catch-all includes the same file, so the panel answers on any name
+# your server does not claim.
+#
+# Two layers with different roles. Basic auth is the protection: without
+# credentials the API returns 401. The secret path only keeps scanners and their
+# 401s out of the access log; it is no secret from anyone reading container
+# logs, and with ANGIE_CONSOLE_HTPASSWD_FILE=none it exposes the data. Put TLS
+# in front of the panel, see docs/security.md (Console Light).
+#
+# auth_basic and auth_basic_user_file are inherited by the nested api location,
+# so they are declared once on the outer one.
+#
+# api_config_files is off explicitly although it is the default: enabled, it
+# serves the CONTENTS of every config file in config_files, shown in the Configs
+# tab. The OSS api is read-only.
+#
+# absolute_redirect off: the auto_redirect fires before auth_basic and by
+# default is built from this listener's scheme and port
+# (`http://<host>:<port>/<path>/`). Behind a TLS proxy the browser would drop to
+# plain http and send the password in clear text. A relative Location resolves
+# against the current scheme and port.
+location ^~ /%%CONSOLE_PATH%%/ {
+  %%CONSOLE_AUTH_BASIC%%
+  %%CONSOLE_AUTH_FILE%%
+  auto_redirect on;
+  absolute_redirect off;
+  alias /usr/share/angie-console-light/html/;
+  index index.html;
+  location /%%CONSOLE_PATH%%/api/ {
+    api_config_files off;
+    api /status/;
+  }
+}

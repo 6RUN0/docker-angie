@@ -1,157 +1,67 @@
 # Troubleshooting
 
-Common problems, their causes, and how to fix them.
+Use the live prefix in every manual check:
 
-See also: [../README.md](../README.md)
-
----
-
-## 1. Port already in use (`bind: address already in use`)
-
-**Symptom.** The container exits immediately with an error like:
-
-```text
-nginx: [emerg] bind() to 0.0.0.0:80 failed (98: Address already in use)
+```sh
+docker exec angie angie -p /data/conf -c angie.conf -t
+docker exec angie angie -p /data/conf -c angie.conf -T
 ```
 
-**Cause.** Another process on the host is already listening on the mapped port.
+A bare `angie -t` checks the packaged prefix, not necessarily the assembled
+runtime tree.
 
-**Fix.** Map to a different host port:
+## 1. Port already in use
+
+Map a different host port. The internal port stays 80 for the standard image
+and 8080 for the unprivileged image:
 
 ```sh
 docker run -p 8081:80 6run0/angie:alpine
-```
-
-To find which process owns the port:
-
-```sh
-# Linux
-ss -tlnp sport = :80
-# or
-lsof -i :80
-```
-
-The unprivileged variant listens inside the container on port 8080, so map
-accordingly:
-
-```sh
 docker run -p 8081:8080 6run0/angie:alpine-unprivileged
 ```
 
----
+## 2. Requests return 444
 
-## 2. Every request returns 444 / connection closed with no response
+The built-in catch-all deliberately closes requests that do not match a custom
+`server_name`. Add a server under `/etc/angie/custom/http.d`. `/healthz` is a
+loopback-only health endpoint and returns 404 to non-loopback clients.
 
-**Symptom.** `curl http://localhost/` exits with "Empty reply from server" or
-curl error 52. A browser shows a "connection was reset" page.
+## 3. An `ANGIE_*` setting has no effect
 
-**Cause.** This is the intended default behavior. The built-in catch-all
-`server` block returns 444 (connection close without response) for any request
-that does not match a configured `server_name`. No virtual host has been added
-yet.
+### Container was restarted instead of recreated
 
-**Fix.** Add your own server block via the `/etc/angie/custom` volume:
+Docker does not change a container's environment on `docker restart`. Recreate
+it (`docker compose up -d --force-recreate`) after editing environment values.
+A restart does re-run the entrypoint, but with the original values.
 
-```sh
-# /path/to/custom/http.d/mysite.conf
-server {
-  listen 80;
-  server_name mysite.example.com;
-  location / { return 200 "hello\n"; }
-}
-```
+### Custom config overrides or duplicates the feature
 
-```sh
-docker run -p 80:80 \
-  -v /path/to/custom:/etc/angie/custom:ro \
-  6run0/angie:alpine
-```
+Inspect the complete live tree with the `-T` command above. `add_header` in a
+nested context replaces inherited headers. A manually declared `log_format`,
+map, or listener can also conflict with an image-managed one.
 
-**Health check is unaffected.** `GET /healthz` always returns `ok` (200) on
-the loopback interface regardless of whether any user vhost is configured.
+## 4. `/data` is not writable
 
----
+**Symptom:** startup reports that `/data` is not writable.
 
-## 3. `ANGIE_*` toggle has no effect
-
-### 3a. Container was restarted, not recreated
-
-**Symptom.** You updated an environment variable and ran `docker restart
-<container>`. The feature is still not active.
-
-**Cause.** `docker restart` keeps the same container and therefore the same
-environment variables that were baked in at `docker run` time. The entrypoint
-scripts re-run on each start, but they see the original env, not the updated
-one.
-
-**Fix.** Remove and recreate the container:
+With a read-only root filesystem, mount the sole writable runtime path:
 
 ```sh
-docker rm -f mycontainer
-docker run ... -e ANGIE_BROTLI_ENABLED=1 --name mycontainer 6run0/angie:alpine
+docker run --read-only --tmpfs /data:mode=1777 6run0/angie:alpine
 ```
 
-With Compose, `docker compose up` (not `restart`) recreates containers whose
-environment has changed.
+For ACME use `-v angie-data:/data` instead. Mounting only `/data/conf` is not
+supported.
 
-### 3b. Running unprivileged with a foreign uid
+## 4b. `CACHE_DIR` bind-mount
 
-**Symptom.** You ran the unprivileged image with `--user <uid>` where `<uid>`
-is not the built-in `app` user (uid/gid 65532). Toggles are silently skipped
-and the container starts with the configuration baked in at build time.
+**Symptom:** the proxy cache fails with permission errors at runtime.
 
-**Cause.** The entrypoint scripts call `angie-ctl` to symlink snippets into
-`/etc/angie/*.d`. Those directories are pre-chowned to uid/gid 65532 at build
-time. A different uid lacks write permission, so `skip_toggle_unless_writable`
-in `docker-entrypoint-common.sh` detects the unwritable dirs, logs a warning,
-and skips the toggle rather than aborting startup.
+**Cause:** with `CACHE_DIR` set, `90-fix-cache-permission.sh` chowns the
+directory contents to `angie` at startup, skipping symbolic links. It runs only
+in the standard image as root; the unprivileged image skips it with a notice.
 
-**Fix.** Either use the default uid:
-
-```sh
-docker run --user 65532:65532 6run0/angie:alpine-unprivileged
-```
-
-Or rebuild the unprivileged image with `--build-arg APP_UID=<your-uid>
---build-arg APP_GID=<your-gid>` so the activation dirs are owned by your
-chosen identity.
-
----
-
-## 4. Permission errors on mounted volumes
-
-### 4a. `/etc/angie/custom` bind-mount
-
-**Symptom.** Angie fails to start or logs permission errors reading config
-files from `/etc/angie/custom`.
-
-**Cause.** The `custom` directory is mounted read-only inside the container,
-but the host directory or its files are not world-readable.
-
-**Fix.** Ensure the host path is readable by the container's runtime user:
-
-- **Default image (runs as root):** the host path must be at least
-  `chmod o+r` or owned by root.
-- **Unprivileged image (uid/gid 65532 by default):** chown the host path to
-  65532 or make it world-readable:
-
-  ```sh
-  chown -R 65532:65532 /path/to/custom
-  docker run --user 65532:65532 \
-    -v /path/to/custom:/etc/angie/custom:ro \
-    6run0/angie:alpine-unprivileged
-  ```
-
-### 4b. `CACHE_DIR` bind-mount
-
-**Symptom.** Angie logs `chown` errors or the proxy cache fails at runtime.
-
-**Cause.** When `CACHE_DIR` is set, `90-fix-cache-permission.sh` runs
-`chown angie: <CACHE_DIR>` recursively at startup. This requires the container
-to be running as root; the script skips silently on the unprivileged variant.
-
-**Fix.** For the default image, ensure the mounted directory is writable by
-the container:
+**Fix:** for the standard image, mount the directory writable:
 
 ```sh
 docker run \
@@ -160,7 +70,7 @@ docker run \
   6run0/angie:alpine
 ```
 
-For the unprivileged image, pre-chown the host path before mounting:
+For the unprivileged image, change the owner on the host before mounting:
 
 ```sh
 chown -R 65532:65532 /host/cache
@@ -170,237 +80,397 @@ docker run --user 65532:65532 \
   6run0/angie:alpine-unprivileged
 ```
 
----
+A cache entry that is a symbolic link keeps its owner. htpasswd files get the
+same fix only under `/etc/angie/custom`; on a read-only mount the entrypoint
+only warns, so make them readable by `angie` on the host.
 
-## 5. GeoIP2 module has no effect
+## 5. `/data/conf` belongs to another UID
 
-**Symptom.** GeoIP2 variables (`$geoip2_data_country_code`, etc.) are empty
-or the module is not loaded.
+The entrypoint refuses to rebuild a live tree created by a different UID. This
+is intentional protection against overwriting another container's files. Run
+with the original UID, use a fresh volume, or repair ownership from a separate
+root container. Do not add `chown` privileges to the application container just
+to bypass the check.
 
-**Cause.** `50-geoip2.sh` activates GeoIP2 only when `GEOIP2_DB_COUNTRY` is
-set to a path that exists and is readable inside the container. If the path is
-wrong, missing, or not mounted, the script logs a warning and exits 0 without
-enabling the module.
+A non-empty `/data/conf` without the image ownership marker is likewise
+rejected. Empty it only after confirming it contains no user data; user config
+belongs in `/etc/angie/custom`.
 
-```sh
-# Script behavior (from rootfs/docker-entrypoint.d/50-geoip2.sh):
-# - GEOIP2_DB_COUNTRY unset  -> silently skipped
-# - path does not exist or not readable -> warning, module not loaded
-# - path contains characters outside [A-Za-z0-9._/-] -> fatal error, startup aborted
+## 6. Custom configuration is silently absent
+
+Only these globs are loaded:
+
+```text
+/etc/angie/custom/conf.d/*.conf
+/etc/angie/custom/http-conf.d/*.conf
+/etc/angie/custom/http.d/*.conf
 ```
 
-**Fix.** Mount the MaxMind `.mmdb` database and point the variable at the
-in-container path:
+A file at the mount root is ignored. Directories must be traversable and files
+readable by the runtime/worker UID. An unreadable glob can look empty without an
+Angie error. Typical safe public-config modes are 0755 for directories and 0644
+for files; use tighter ownership-aware modes for secrets.
+
+## 7. Reload does not work
+
+`angie -s reload` needs a pid file, while this image uses `pid off`. Validate the
+live tree, then signal the container:
 
 ```sh
-docker run \
-  -e GEOIP2_DB_COUNTRY=/geoip/GeoLite2-Country.mmdb \
-  -v /host/path/to/GeoLite2-Country.mmdb:/geoip/GeoLite2-Country.mmdb:ro \
+docker exec angie angie -p /data/conf -c angie.conf -t
+docker kill -s HUP angie
+```
+
+This reloads changes from `/etc/angie/custom`. It does not change the
+container's environment; recreate for environment changes.
+
+## 8. GeoIP2 variables are empty
+
+`GEOIP2_DB_COUNTRY` must name a mounted, readable regular file. The allowed path
+characters are `A-Za-z0-9._/-`. GeoIP2 access-log variants are ignored unless
+the database is active. Verify with the live `-T` command and search for
+`geoip2`.
+
+## 9. ModSecurity does not block requests
+
+The image contains the engine, not a ruleset. Mount a ruleset and include it
+from custom configuration. `ANGIE_MODSECURITY_ENABLED=yes` alone performs no
+filtering.
+
+## 10. Console Light fails at startup or returns 401
+
+Check all of the following:
+
+- `ANGIE_CONSOLE_PATH` is at least 16 allowed characters without `/`;
+- `ANGIE_CONSOLE_HTPASSWD_FILE` is an absolute, non-empty, readable file;
+- the standard image's `angie` workers, not only the root master, can read it;
+- the request includes the secret path and valid basic-auth credentials.
+
+`ANGIE_CONSOLE_HTPASSWD_FILE=none` removes authentication; do not use it on an
+unprotected listener. Put TLS in front of the console.
+
+## 11. ACME repeatedly orders certificates
+
+`/data/acme` is not persistent, usually because `/data` is tmpfs or the
+container was recreated without its volume. Attach a persistent volume and keep
+it across upgrades. Test with a staging CA before switching to production.
+
+For HTTP validation, publish host port 80 to the image public port. The
+standard image defaults to 80; the unprivileged image defaults to 8080 and
+rejects internal challenge ports below 1024.
+
+## 12. ACME validation is reset or redirected
+
+Use the same HTTP listener for the normal redirect and the ACME challenge. The
+ACME handler runs before rewrite processing, so it can answer the token while
+other requests redirect to HTTPS. A separate challenge port with no custom
+server can reset non-challenge requests.
+
+DNS and ALPN challenges need additional DNS/network configuration not prepared
+by this image.
+
+## 13. HSTS remains after the toggle is disabled
+
+Browsers cache HSTS. Re-enable it with `ANGIE_HSTS_MAX_AGE=0`, serve that header
+through working HTTPS long enough for clients to receive it, then disable the
+toggle. Clearing the server header alone cannot clear client state.
+
+## 14. Changed files remain stale or return 404
+
+Disable `ANGIE_OPEN_FILE_CACHE_ENABLED` while diagnosing deployments. Cached
+file descriptors and negative lookups can remain valid briefly. For versioned
+asset names, include `snippets/cache-busting.conf` only when the corresponding
+unversioned file exists.
+
+## 15. Container exits with code 137 during stop
+
+Docker sent SIGKILL after its grace period expired. Keep
+`ANGIE_WORKER_SHUTDOWN_TIMEOUT` (default `8s`) below `stop_grace_period` and
+allow enough time for active connections. Prefer SIGQUIT/default container stop
+for graceful shutdown.
+
+## 16. Entrypoint output is missing
+
+Any non-empty `ANGIE_ENTRYPOINT_QUIET_LOGS` value suppresses all entrypoint
+messages, including errors. Unset it while diagnosing. JSON is the default;
+set `ANGIE_ERROR_LOG_JSON_ENABLED=no` for human-readable text.
+
+## 17. Configuration assembly fails
+
+The entrypoint fails closed if a setup script or the final live-tree check
+fails. Read the first JSON record with `"level":"error"`, then reproduce it with the explicit
+`-t` command at the top of this document. It is normal for the container to stop
+rather than serve a partially applied configuration.
+
+## 18. Container killed by OOM
+
+**Symptom:** the container exits with status 137 and the kernel log shows the
+OOM killer taking an Angie master or worker.
+
+**Cause:** `angie.conf` sets `worker_rlimit_nofile 65536` and, in `events {}`,
+`worker_connections 32768`. Each worker allocates its connection array at
+start, so memory grows with the worker count, and `worker_processes auto`
+counts CPUs from the affinity mask (`--cpuset-cpus`), not from the `--cpus`
+quota. Under a tight `-m` the OOM killer can fire before any load arrives.
+
+**Fix:** neither directive can be overridden from the custom volume. A second
+declaration in `custom/conf.d` fails startup with
+`"worker_rlimit_nofile" directive is duplicate`, one in `custom/http-conf.d`
+with `"worker_connections" directive is not allowed here`. Two ways work.
+
+Reduce the worker count. `--cpus` alone does not: measured on a 16-CPU host
+(Docker 29.9.0, 1.12.4 Alpine image, 2026-10-23), `--cpus 2 -m 256m` started
+16 workers. Either of these started 2:
+
+```sh
+docker run --cpus 2 -m 256m \
+  -e ANGIE_ENTRYPOINT_WORKER_PROCESSES_AUTOTUNE=1 6run0/angie:alpine
+docker run --cpuset-cpus 0-1 -m 256m 6run0/angie:alpine
+```
+
+Or replace the whole `angie.conf` when other limits are needed:
+
+```sh
+docker run -m 256m -v /path/to/angie.conf:/etc/angie/angie.conf:ro \
   6run0/angie:alpine
 ```
 
-Verify the module loaded:
+The price of the second way: you own the include list. Your file must repeat
+every `include` of the shipped one (`modules.d`, `conf.d`, `http-conf.d`,
+`http.d` and their `/etc/angie/custom` pairs), otherwise the toggles and the
+custom volume stop working; `conf.d` carries `user angie` of the standard image
+and `pid off`. The `:ro` mount is no obstacle: the file is copied to
+`/data/conf` and the scripts edit the copy. Keep three lines in their shipped
+form if their variables are needed: `30-tune-worker-processes.sh` looks for
+`worker_processes`, `31-error-log-json.sh` for `error_log /dev/stderr;` or
+`error_log /dev/stderr format=json;`, `32-worker-shutdown-timeout.sh` for
+`worker_shutdown_timeout <number>[ms|s|m];`. A line written otherwise is not
+rewritten: the last two scripts warn and continue, the first stays silent.
+
+## 19. `exec format error` or no matching manifest
+
+**Symptom:** the container exits immediately with a message ending in
+`exec format error`, or `docker pull` reports no matching manifest for the
+host platform.
+
+**Cause:** the host architecture is not in the image manifest. Published
+images are `linux/amd64` and `linux/arm64` only, see
+[limitations.md](limitations.md#10-supported-platforms).
+
+**Fix:** on another architecture, build the image locally
+(`docker build -t angie-alpine -f alpine/Dockerfile .`), or run the published
+one under emulation when the host has a `binfmt_misc` handler for it
+(`docker run --platform linux/amd64 6run0/angie:alpine`).
+
+## 20. `angie -t` or `angie -T` shows the wrong configuration
+
+**Symptom:** inside the container `angie -T` lacks the snippets the toggles
+enabled, `angie -t` passes on a configuration known to be broken, or an
+`angie-ctl` change does not show up.
+
+**Cause:** the compiled-in prefix is `/etc/angie` (see `angie -V`), the
+read-only skeleton. The served tree is `/data/conf`, selected by `-p` and `-c`
+in `CMD`. A bare `angie -t` or `angie -T` reads the skeleton, a configuration
+nobody runs.
+
+**Fix:** use the wrapper that adds the live prefix, or the explicit form:
 
 ```sh
-docker exec <container> angie -T 2>/dev/null | grep geoip2
+docker exec <container> angie-runtime -t
+docker exec <container> angie-runtime -T
+docker exec <container> angie -p /data/conf -c angie.conf -T
 ```
 
-**Related - startup aborts with `unknown "geoip2_country_code" variable`.** A
-geoip2 log format enabled on a previous run can outlive geoip2 on a persistent
-`/etc/angie` volume. angie validates the variables of every declared
-`log_format`, so the orphaned `*-with-geoip2` format fails `angie -t` for the
-whole config even when unused. `40-log.sh` clears these snippets at startup, so
-recreating the container heals it; to fix a running container, disable both the
-access log and its format together (a single `angie-ctl dis` call removes both
-symlinks, then validates once):
+The exact command is in the image metadata:
+`docker inspect -f '{{json .Config.Cmd}}' 6run0/angie:alpine`. `angie-ctl`
+needs no flags: the image sets `ANGIE_ETC=/data/conf` and
+`ANGIE_BIN=/usr/local/bin/angie-runtime`.
 
-```sh
-docker exec <container> angie-ctl httpconf dis \
-  040-log-logfmt-with-geoip2.conf 030-log-format-logfmt-with-geoip2.conf
+## 21. Proxying to `https` fails certificate verification
+
+**Symptom:** `proxy_pass https://...` returns `502`, and the error log has
+
+```text
+upstream SSL certificate verify error: (20:unable to get local issuer certificate)
 ```
 
-The geoip2 map itself can orphan the same way - a stale `geoip2 <path>` left by
-a prior run fails `angie -t` with `MMDB_open(...) failed` once the database is
-gone. The entrypoint clears the map and its module at startup, so recreating the
-container heals this too.
+although `curl` from the host reaches the same address, and the image has a
+CA store at `/etc/ssl/certs/ca-certificates.crt` (118 roots in the Alpine and
+148 in the Debian 1.12.4 image, counted 2026-10-23).
 
-**General rule.** Feature toggles are declarative: the entrypoint resets the
-snippets and modules it manages at every start, then re-enables only what the
-current `ANGIE_*` environment asks for. Removing a variable disables its feature
-on the next start (restart or recreate the container so the entrypoint re-runs),
-even on a persistent `/etc/angie` volume. Layer your own configuration through
-the `/etc/angie/custom` volume rather than enabling shipped snippets by hand -
-a hand-enabled snippet is disabled again on the next start. For example,
-disabling the default access log (`ANGIE_LOG_LOGFMT=no`) without selecting
-another format leaves the config with no global `access_log` at all - that is
-the declarative result, not a fault (`angie -t` still passes). The one exception
-is `worker_processes` auto-tuning (`ANGIE_ENTRYPOINT_WORKER_PROCESSES_AUTOTUNE`),
-which rewrites `angie.conf` in place behind a one-time sentinel: a value tuned on
-a prior run stays until you reset the file or recreate the volume (this is a
-benign performance value and never fails `angie -t`).
+**Cause:** usually the chain depth, not the store. `proxy_ssl_verify_depth`
+defaults to 1, and public chains are usually longer. Measured 2026-10-23 on
+the 1.12.4 Alpine image against `https://letsencrypt.org/` (4 certificates in
+the served chain): the default depth gave `502` with the error above, depth 2
+gave `200`.
 
----
+**Fix:** allow the real chain length:
 
-## 6. ModSecurity is enabled but nothing is blocked
-
-**Symptom.** `ANGIE_MODSECURITY_ENABLED=1` is set, Angie starts, but malicious
-requests pass through without being blocked.
-
-**Cause.** The image loads the ModSecurity dynamic module (`libmodsecurity`)
-and enables the Angie connector, but it does not bundle any rule set. Without
-rules, the WAF engine runs in detection mode with nothing to match against and
-blocks nothing.
-
-**Fix.** Supply an external rule set such as the OWASP Core Rule Set (CRS):
-
-```sh
-docker run \
-  -e ANGIE_MODSECURITY_ENABLED=1 \
-  -v /host/path/to/crs:/etc/angie/modsec/crs:ro \
-  6run0/angie:alpine
-```
-
-Your ModSecurity configuration should `Include` the rule files. See
-[limitations.md](limitations.md) for the full list of WAF constraints and
-[configuration.md](configuration.md) for the `ANGIE_MODSECURITY_ENABLED` toggle.
-
----
-
-## 7. Container killed by OOM / out-of-memory
-
-**Symptom.** The container exits with status 137 (killed by SIGKILL), and the
-host OOM killer log shows the Angie master or worker process as the victim.
-
-**Cause.** The default configuration is tuned for high-concurrency production
-use:
-
-- `worker_rlimit_nofile 65536` - maximum open file descriptors per worker
-- `worker_connections 32768` - maximum simultaneous connections per worker
-
-Under a Docker memory limit this can exhaust the container's address space or
-trigger the OOM killer before connection queues actually fill up.
-
-**Fix.** Lower the limits via the custom volume:
-
-```sh
-# /path/to/custom/angie.conf or a snippet under custom/http.d/
-worker_rlimit_nofile 8192;
-events {
-  worker_connections 4096;
+```nginx
+location / {
+  proxy_pass https://upstream.example;
+  proxy_ssl_verify on;
+  proxy_ssl_verify_depth 3;
+  proxy_ssl_name upstream.example;
+  proxy_ssl_server_name on;
+  proxy_ssl_trusted_certificate /etc/ssl/certs/ca-certificates.crt;
 }
 ```
 
+Count the chain of a given upstream from outside:
+
 ```sh
-docker run \
-  -m 256m \
-  -v /path/to/custom:/etc/angie/custom:ro \
-  6run0/angie:alpine
+echo | openssl s_client -connect upstream.example:443 \
+  -servername upstream.example -showcerts 2>/dev/null | grep -c 'BEGIN CERT'
 ```
 
-Or raise the container memory limit to match the expected concurrency.
+`proxy_ssl_trusted_certificate` is mandatory: the system store is not picked
+up by itself, and startup fails with
+`[emerg] no proxy_ssl_trusted_certificate for proxy_ssl_verify`.
 
----
+## 22. `SSL alert number 80` with ACME enabled
 
-## 8. `exec format error` / wrong architecture
-
-**Symptom.** The container fails immediately with:
+**Symptom:** the container runs, the TLS listener is up, the startup
+`angie -t` passed, but every handshake fails. The client reports
 
 ```text
-standard_init_linux.go:228: exec user process caused "exec format error"
+SSL routines:ssl3_read_bytes:tlsv1 alert internal error
+SSL alert number 80
 ```
 
-**Cause.** Docker pulled the image for a different CPU architecture than the
-host (e.g., arm64 image on an amd64 host, or vice versa). The image supports
-`linux/amd64` and `linux/arm64`.
+`curl` shows it as `error:0A000438`, a browser as `ERR_SSL_PROTOCOL_ERROR`.
 
-**Fix.** Pull the correct architecture explicitly:
+**Cause:** no certificate has been issued yet, and `$acme_cert_<name>` is
+empty. The empty variable is valid for `angie -t`, so startup does not catch
+it. The window between the first start and the first issuance always exists;
+while it is open, the redirect from HTTP leads to a TLS listener that answers
+nothing.
+
+**Fix:** look at what the client got from the CA:
 
 ```sh
-docker run --platform linux/amd64 6run0/angie:alpine
-docker run --platform linux/arm64 6run0/angie:alpine
+docker logs <container> 2>&1 | grep '"acme_client"'
+docker exec <container> ls -l /data/acme/le/
 ```
 
-When building multi-arch images with Buildx, specify `--platform
-linux/amd64,linux/arm64`.
+Replace `le` with `ANGIE_ACME_CLIENT`. A non-empty `certificate.pem` means the
+cause is elsewhere; until the first issuance the file exists with size 0.
+Common log lines:
 
----
+- `request to ACME server failed`: the CA directory is unreachable. Check
+  `ANGIE_ACME_DIRECTORY` and outbound access from the container;
+- `no resolver configured`: your configuration has `resolver off;`. The
+  default `conf` works for ACME, `off` disables it, see
+  [configuration.md](configuration.md#dns-name-resolution);
+- a failed challenge: the CA could not fetch `/.well-known/acme-challenge/...`.
+  Check that host port 80 is published to `ANGIE_ACME_HTTP_PORT` (`-p 80:80`
+  standard, `-p 80:8080` unprivileged) and that the domain points to this host.
 
-## 9. Container exits immediately on startup
+## 23. `ACME module will use port 80 for HTTP challenges, superuser required`
 
-**Symptom.** `docker ps` never shows the container as running. `docker logs
-<container>` shows an error from one of the entrypoint scripts.
+**Symptom:** this warning appears in the unprivileged image. Under a runtime
+where uid 65532 cannot bind ports below 1024 (Kubernetes, plain runc) startup
+then fails on `bind()`.
 
-**Cause.** The entrypoint runs every executable `*.sh` file inside
-`/docker-entrypoint.d/` in lexical order. If any script exits non-zero, the
-main shell (`set -e` is active) aborts and the container exits before Angie
-starts. Common sub-causes:
+**Cause:** the warning names the wrong fix. `acme_http_port` defaults to 80,
+nobody listens there in the unprivileged image, so the module opens a listener
+of its own. The message appears only with your own `acme_client` in
+`custom/http-conf.d` without `ANGIE_ACME_ENABLED`: the toggle sets
+`acme_http_port` to the public port itself and refuses values below 1024 in
+the unprivileged image. The standard image has a root master and listens on 80,
+so it does not show the warning.
 
-- A custom script mounted into `/docker-entrypoint.d/` has a bug or exits
-  non-zero.
-- A custom script is not marked executable (the entrypoint logs a warning and
-  skips it, but this can mask a missing feature).
-- The default image is started as a non-root user (see section 3b).
+**Fix:** enable `ANGIE_ACME_ENABLED`, or add `acme_http_port 8080;` to your
+snippet, matching an existing listener. The module then opens no listener and
+the challenge is served by the existing `server {}`: the handler runs in the
+`post_read` phase, before `rewrite`, so even a server doing only `return 301`
+to HTTPS answers the token. Without the toggle, also set
+`acme_client_path /data/acme;`: the default state path is not writable for a
+non-root master and fails startup with
+`mkdir() "/var/lib/angie/acme/<name>" failed (13: Permission denied)`.
 
-**Fix.** Inspect the logs:
+Do not move the challenge to a dedicated port: the module's own listener drops
+every request that is not a live token, the HTTP-to-HTTPS redirect included.
 
-```sh
-docker logs <container>
+## 24. Application behind the proxy lost its `Cache-Control`
+
+**Symptom:** the backend sends `Cache-Control: max-age=60, public`, the client
+receives `no-cache` or a one-year lifetime instead. The status is `200`, the
+logs show nothing.
+
+**Cause:** an `expires` directive reached the proxying `location`, for example
+`snippets/expires-by-type.conf` included at `server` level. `expires` does not
+add to the upstream headers, it replaces `Cache-Control` and `Expires`: a
+`text/html` response gets `epoch` from the type map, which is `no-cache`.
+
+**Fix:** include `snippets/expires-by-type.conf` only in the `location` that
+serves static files, never in one with `proxy_pass`:
+
+```nginx
+location /static/ {
+  include snippets/expires-by-type.conf;
+}
+
+location /api/ {
+  proxy_pass http://backend:8000;
+}
 ```
 
-The failing script and its exit code are printed:
+`expires off;` inside a `location` cancels an inherited directive locally.
+
+## 25. Security headers vanish in my `location`
+
+**Symptom:** `ANGIE_SECURITY_HEADERS_ENABLED` is on, some paths carry the
+headers and others do not. `angie -T` shows every `add_header` in place.
+
+**Cause:** `add_header` sets do not merge across levels. A `server` or
+`location` with any `add_header` of its own, even for an unrelated header,
+replaces the inherited set. Measured on the 1.12.4 Alpine image (2026-10-23):
+a `location` with only `add_header Cache-Control "nested-only";` returned
 
 ```text
-<timestamp> [error] 99-zz-fail.sh failed with exit 7, aborting startup
+HTTP/1.1 200 OK
+Content-Type: application/octet-stream
+Cache-Control: nested-only
 ```
 
-Check the script's exit code, shebang, and executable bit:
+while a sibling `location` without its own `add_header` returned
+`X-Content-Type-Options: nosniff`. The `always` flag is unrelated: it is about
+status codes, not inheritance. `expires` is not `add_header`, so
+`snippets/expires-by-type.conf` does not trigger the replacement.
 
-```sh
-ls -la /path/to/script.sh
-# must be -rwxr-xr-x
-```
+**Fix:** repeat the needed headers in the block where you declare your own;
+`add_header` has no "append to inherited" mode.
 
-For a non-executable script, the warning is:
+Do not confuse this with selection by content type: `Referrer-Policy`,
+`X-Frame-Options` and `Permissions-Policy` go only to documents, stylesheets and
+similar types, see `055-security-headers.conf`. The tell: when the set is
+replaced, `X-Content-Type-Options` disappears too, and it is sent with every
+response type.
+
+## 26. `IPv6 is unavailable` in the startup log
+
+**Symptom:** a `notice` line:
 
 ```text
-<timestamp> [warn] ignoring /docker-entrypoint.d/myscript.sh, not executable
+IPv6 is unavailable; the built-in listener serves 0.0.0.0:80 only
 ```
 
-Apply `chmod +x` and restart.
+with `8080` in the unprivileged image.
+
+**Cause:** the kernel has no IPv6 (built without it or booted with
+`ipv6.disable=1`; the sign is a missing `/proc/net/if_inet6`). The entrypoint
+removes the built-in `listen [::]:<port>` line from the live copy, otherwise
+startup would fail with `(97: Address family not supported by protocol)`. This
+is not an error. `sysctl net.ipv6.conf.all.disable_ipv6=1` does not lead here:
+the IPv6 socket can still be created and the line stays.
+
+**What remains yours:** `listen [::]` lines in the custom volume are not
+touched and fail startup on such a kernel with the same error `97`. Keep files
+without IPv6 listeners for such a host.
 
 ---
 
-## 10. `worker_processes` autotune has no effect (read-only filesystem)
-
-**Symptom.** `ANGIE_ENTRYPOINT_WORKER_PROCESSES_AUTOTUNE=1` is set but
-`worker_processes` in `angie.conf` remains `auto` rather than a concrete
-number.
-
-**Cause.** `30-tune-worker-processes.sh` rewrites `/etc/angie/angie.conf` in
-place with `sed -i`. If the filesystem is mounted read-only (e.g., via
-`--read-only` or a read-only bind-mount covering `/etc/angie`), the `touch`
-probe at the start of the script detects the immutable filesystem, logs an
-error, and exits 0 without modifying the file.
-
-Angie continues to start normally with `worker_processes auto`, which lets the
-master process determine the count at runtime. The autotune script provides a
-cgroup-aware override (cpuset + CPU quota for both v1 and v2), which is more
-accurate in CPU-limited containers than the Angie built-in `auto`.
-
-**Fix.** Either remove the read-only constraint on `/etc/angie`, or accept
-`worker_processes auto` and rely on Angie's own detection. For a persistent
-writable container layer the tune is applied only once (the script detects its
-own sentinel comment and skips on subsequent restarts).
-
-See [configuration.md](configuration.md) for
-`ANGIE_ENTRYPOINT_WORKER_PROCESSES_AUTOTUNE` and
-[limitations.md](limitations.md) for filesystem constraints.
-
----
-
-[Configuration](configuration.md) |
-[Security](security.md) |
-[Usage](usage.md) |
-[Back to README](../README.md)
+[Configuration](configuration.md) | [Usage](usage.md)
 
 Russian: [troubleshooting.ru.md](troubleshooting.ru.md).

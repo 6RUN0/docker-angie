@@ -2,13 +2,10 @@
 
 . /docker-entrypoint-common.sh
 
-skip_toggle_unless_writable
-
 : "${ANGIE_SUBS_ENABLED:=no}"
 
-# Reset the substitutions module before re-enabling per env, so disabling
-# it (clearing ANGIE_SUBS_ENABLED) actually unloads it on a persistent
-# /etc/angie volume instead of leaving the load_module stuck on.
+# Reset the substitutions module before re-enabling per env (declarative
+# toggle, see docker-entrypoint-common.sh): only ANGIE_SUBS_ENABLED loads it.
 reset_module http_subs_filter.conf
 
 case "${ANGIE_SUBS_ENABLED}" in

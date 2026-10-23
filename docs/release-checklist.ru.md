@@ -22,8 +22,11 @@ entrypoint, обновление `angie-ctl`); **подъём версии Angie
   оператору apk `=~${ANGIE_VERSION}`).
 - `debian/Dockerfile` - `ARG ANGIE_VERSION=` (сборка сама находит точную версию
   apt-пакета, соответствующую ему).
-- Держите оба Dockerfile в синхроне. Пин `angie-ctl` (`ANGIE_CTL_COMMIT`) не
-  зависит от версии Angie - поднимайте его только намеренно.
+- Держите оба Dockerfile в синхроне. `angie-ctl` встроен как
+  `rootfs/usr/local/bin/angie-ctl`: при обновлении вручную проверьте ревизию
+  исходника, запустите его тесты, обновите SHA-256 в `configuration.ru.md` и
+  добавьте запись в changelog. Автоматическая проверка upstream следит за
+  Angie, а не за встроенным helper.
 
 ## 3. Актуализируйте доки, в которых тег зашит
 

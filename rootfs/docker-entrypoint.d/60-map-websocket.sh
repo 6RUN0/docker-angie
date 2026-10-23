@@ -2,14 +2,11 @@
 
 . /docker-entrypoint-common.sh
 
-skip_toggle_unless_writable
-
 : "${ANGIE_MAP_WEBSOCKET_ENABLED:=no}"
 
-# Reset the WebSocket map before re-enabling per env, so disabling it
-# (clearing ANGIE_MAP_WEBSOCKET_ENABLED) actually takes effect on a persistent
-# /etc/angie volume instead of leaving the snippet stuck on. The map directive
-# is core, so the orphan never breaks `angie -t`.
+# Reset the WebSocket map before re-enabling per env (declarative toggle, see
+# docker-entrypoint-common.sh). The map directive is core, so an orphan never
+# breaks `angie -t`.
 reset_httpconf 060-map-websocket.conf
 
 case "${ANGIE_MAP_WEBSOCKET_ENABLED}" in

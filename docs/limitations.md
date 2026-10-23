@@ -1,79 +1,78 @@
 # Limitations
 
-Known boundaries and constraints of the Angie Docker image.
+Known boundaries of the Angie Docker image.
 
-## 1. ModSecurity: WAF engine only, no default ruleset
+## 1. ModSecurity includes the engine, not a ruleset
 
-The image loads the ModSecurity shared library, but **no rule set is bundled**.
-Enabling the WAF module (`ANGIE_MODSECURITY_ENABLED=yes`) activates only the engine
-itself; without rules, it performs no filtering. You must supply a ruleset --
-such as [OWASP Core Rule Set](https://coreruleset.org/) -- and point ModSecurity
-at it via a custom configuration file mounted under `/etc/angie/custom`.
+`ANGIE_MODSECURITY_ENABLED=yes` loads ModSecurity but does not block anything
+without rules. Supply and review a ruleset through `/etc/angie/custom`.
 
-## 2. All modules are dynamic and disabled by default
+## 2. Optional dynamic modules are disabled by default
 
-Brotli, GeoIP2, ModSecurity, and the substitutions filter are all built as
-dynamic modules. None are loaded unless explicitly enabled through the
-corresponding `ANGIE_*` environment variable at container start. A module whose
-`load_module` directive is absent from `modules.d/` is completely inert,
-regardless of whether its shared library is present in the image.
+Brotli, GeoIP2, ModSecurity, substitutions, and Zstandard are loaded only when
+enabled. The ACME client is built into Angie but remains inactive until both the
+toggle and a referencing custom server are present.
 
-## 3. Configuration runs once per container lifetime
+## 3. Environment is fixed when a container is created
 
-The entrypoint scripts in `/docker-entrypoint.d/` run **only once**, when the
-container first starts. The `ANGIE_ENTRYPOINT_WORKER_PROCESSES_AUTOTUNE` script
-enforces this explicitly: it writes a sentinel comment into `angie.conf` on
-first run and exits early on any subsequent execution that finds that sentinel.
-
-As a consequence, changing any `ANGIE_*` variable takes effect **only after
-recreating the container** (`docker compose up --force-recreate` or
-`docker rm` + `docker run`). A plain `docker restart` re-executes the
-entrypoint, but the idempotency guards prevent re-applying configuration, so the
-old settings remain in effect.
+The entrypoint rebuilds `/data/conf` on every start, so a restart re-applies the
+same environment. Changing Compose or `docker run` environment values requires
+container recreation. Editing `/etc/angie/custom` does not: validate the live
+tree and send HUP.
 
 ## 4. No TLS listener by default
 
-The image `EXPOSE`s port 80 (privileged) or 8080 (unprivileged). The
-`050-ssl.conf` snippet is active by default -- it is a git-tracked symlink in
-`http-conf.d/` -- but it contains only SSL session cache and cipher-preference
-tuning. No `server` block in the shipped configuration uses `listen ... ssl`,
-so HTTPS is not served out of the box. To terminate TLS, add a vhost with an
-`ssl` listener via the `/etc/angie/custom` volume.
+The image provides TLS defaults but no `listen ... ssl` server. Add a custom
+vhost or terminate TLS upstream. HSTS and Console Light should not be exposed
+before TLS is working.
 
-## 5. `latest` tag means Alpine only
+## 5. `latest` is Alpine only
 
-The `latest` tag on Docker Hub (`6run0/angie`) and GHCR
-(`ghcr.io/6run0/docker-angie`) resolves to the Alpine variant. To use the Debian
-variant, pull an explicit tag such as `debian` or `1.12.3-build1-debian`. There
-is no `latest-debian` convenience alias.
+Use `debian` or an immutable Debian tag explicitly. Unprivileged tags carry the
+`-unprivileged` suffix; there is no rootless `latest` alias.
 
-## 6. Worker-process autotune is a no-op on a read-only filesystem
+## 6. `/data` must be writable
 
-When `ANGIE_ENTRYPOINT_WORKER_PROCESSES_AUTOTUNE` is set, the entrypoint script
-(`30-tune-worker-processes.sh`) rewrites `worker_processes` in `angie.conf` in
-place using `sed -i`. If the container filesystem is read-only (e.g., deployed
-with `readOnlyRootFilesystem: true`), the `touch /etc/angie/angie.conf` probe
-fails and the script exits without tuning, logging an error. The
-`worker_processes` directive retains its baked-in default value.
+Both image variants support a read-only root filesystem, but the entrypoint must
+build `/data/conf` and Angie must write `/data/tmp`. Mount `/data` as tmpfs or a
+volume. Do not mount `/data/conf` by itself.
 
-## 7. Platform support: `linux/amd64` and `linux/arm64` only
+A persistent `/data/conf` is tied to its creating UID. A container running as a
+different UID fails rather than overwriting it. Use a fresh volume or change
+ownership outside the application container.
 
-Images are built and tested only for `linux/amd64` and `linux/arm64`. Other
-architectures (e.g., `linux/arm/v7`, `linux/s390x`) are not supported and no
-manifest entries exist for them.
+## 7. ACME requires persistent storage
 
-## 8. The default image requires a root user
+`/data/acme` holds account keys and certificates. A tmpfs loses them on every
+recreation, triggers new certificate orders, and can hit CA rate limits. HTTP is
+the only challenge flow prepared by the image; DNS and ALPN require additional
+network and DNS configuration.
 
-The default image binds port 80, and its pid file (`/run/angie.pid`) and cache
-directories (`/var/cache/angie/*`) are root-owned. Running the default image
-as a non-root user will cause an immediate startup failure with a clear error
-message. For rootless operation, use the `-unprivileged` image variant, which
-listens on port 8080 and has its paths relocated accordingly.
-See [security.md](security.md) for details.
+## 8. Open-file caching delays file updates
+
+With `ANGIE_OPEN_FILE_CACHE_ENABLED=yes`, descriptor and metadata caching can
+make an edited or replaced file appear stale for the configured validity
+interval. Disable it while diagnosing file-deployment issues.
+
+## 9. Ports and privileges differ by variant
+
+The standard image needs a root master or `CAP_NET_BIND_SERVICE` for port 80;
+workers run as `angie`. The unprivileged image uses port 8080 and needs no
+capabilities. It cannot bind an ACME challenge port below 1024 internally.
+
+## 10. Supported platforms
+
+Published images target `linux/amd64` and `linux/arm64`. Other architectures
+are not built or tested.
+
+## 11. Kubernetes conditions are documented, not cluster-tested
+
+Use `readOnlyRootFilesystem: true`, mount writable `emptyDir` or persistent
+storage at `/data`, and match the service/healthcheck port to the chosen image
+variant. The project does not currently claim end-to-end Kubernetes validation.
 
 ---
 
-- [Configuration reference](configuration.md)
-- [Security hardening](security.md)
+[Configuration](configuration.md) | [Security](security.md)
 
 Russian: [limitations.ru.md](limitations.ru.md).

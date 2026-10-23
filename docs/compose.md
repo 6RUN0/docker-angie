@@ -30,6 +30,9 @@ services:
     image: 6run0/angie:alpine
     container_name: angie
     restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /data:mode=1777
     ports:
       - "8080:80"
     healthcheck:
@@ -64,6 +67,9 @@ services:
     image: 6run0/angie:alpine
     container_name: angie
     restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /data:mode=1777
     networks:
       - front
     ports:
@@ -106,6 +112,9 @@ services:
     container_name: angie
     user: "65532:65532"
     restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /data:mode=1777
     ports:
       - "8080:8080"
     healthcheck:
@@ -122,10 +131,33 @@ Override the runtime identity without rebuilding:
 docker compose run --user 1000:1000 angie
 ```
 
-Any uid that can write `/etc/angie/http-conf.d` and `/etc/angie/modules.d`
-(chowned to `65532` in the image) can also toggle features via `ANGIE_*`
-variables at startup. A foreign uid that cannot write those dirs falls back to
-the baked-in defaults silently.
+Any UID can use runtime toggles because the entrypoint writes only to `/data`.
+A persistent `/data/conf` created by another UID is rejected; use a fresh
+tmpfs/volume or correct its ownership from outside the application container.
+
+## Persistent `/data` for ACME
+
+The examples above use tmpfs and are stateless. When ACME is enabled, replace
+`tmpfs` with a persistent volume so account keys and certificates survive
+container recreation:
+
+```yaml
+services:
+  angie:
+    image: 6run0/angie:alpine
+    read_only: true
+    volumes:
+      - angie-data:/data
+      - ./angie-config:/etc/angie/custom:ro
+    environment:
+      ANGIE_ACME_ENABLED: "yes"
+
+volumes:
+  angie-data:
+```
+
+Do not use tmpfs for ACME: repeated certificate orders can exhaust CA rate
+limits. Do not mount `/data/conf` separately; it is rebuilt at every start.
 
 ---
 

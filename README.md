@@ -12,7 +12,9 @@ dynamic modules, runtime feature toggles, and a non-root variant.
 
 The bundled modules - Brotli, Zstandard, GeoIP2, ModSecurity (WAF), and the
 substitutions filter - ship **disabled** and are switched on at container
-start through `ANGIE_*` environment variables. Two bases are published:
+start through `ANGIE_*` environment variables. Optional ACME, Console Light,
+caching, CORS, HSTS, and reusable snippets are included too. Two bases are
+published:
 **Alpine** (default) and **Debian**, each with a rootless **unprivileged**
 variant.
 
@@ -62,6 +64,7 @@ Enable features with `ANGIE_*` variables and mount your config:
 
 ```bash
 docker run -d --name angie \
+  --read-only --tmpfs /data:mode=1777 \
   -p 80:80 \
   -e ANGIE_BROTLI_ENABLED=yes \
   -e ANGIE_GZIP_ENABLED=yes \
@@ -72,15 +75,21 @@ docker run -d --name angie \
 Rootless deployment (listens on 8080, runs as uid/gid 65532):
 
 ```bash
-docker run -d -p 8080:8080 6run0/angie:alpine-unprivileged
+docker run -d --read-only --tmpfs /data:mode=1777 \
+  -p 8080:8080 6run0/angie:alpine-unprivileged
 ```
+
+Both variants support a read-only root filesystem. The standard image keeps a
+root master, `angie` workers, and port 80; the unprivileged image uses port 8080
+and defaults to uid/gid 65532. In both variants `/etc/angie` is an immutable
+skeleton and the live tree is rebuilt under `/data/conf` at every start.
 
 - Compose examples: [docs/compose.md](docs/compose.md)
 - Building the images from source: [docs/usage.md](docs/usage.md)
 
 ## Configuration
 
-Key toggles (full table of 20+ variables in
+Key toggles (full reference in
 [docs/configuration.md](docs/configuration.md)):
 
 | Variable | Default | Description |
@@ -94,8 +103,16 @@ Key toggles (full table of 20+ variables in
 | `ANGIE_MAP_WEBSOCKET_ENABLED` | `no` | Enable the WebSocket upgrade variable map. |
 | `ANGIE_REAL_IP_FROM` | unset | Trusted proxy CIDRs; recovers the real client IP behind a proxy/LB. |
 | `ANGIE_SECURITY_HEADERS_ENABLED` | `no` | Emit a conservative baseline of security response headers. |
+| `ANGIE_CHARSET_UTF8_ENABLED` | `no` | Declare UTF-8 for textual response types. |
+| `ANGIE_EXPIRES_ENABLED` | `no` | Define lifetimes for `snippets/expires-by-type.conf`. |
+| `ANGIE_OPEN_FILE_CACHE_ENABLED` | `no` | Cache open file descriptors and metadata. |
+| `ANGIE_HSTS_ENABLED` | `no` | Emit HSTS on HTTPS responses; read the removal procedure first. |
+| `ANGIE_CORS_ASSETS_ENABLED` | `no` | Allow cross-origin use of fonts and images. |
 | `ANGIE_STATUS_API_ENABLED` | `no` | Serve the JSON status API and Prometheus `/metrics` on `:8181`. |
-| `ANGIE_ERROR_LOG_JSON_ENABLED` | `no` | Write the error log as structured JSON (one object per line). |
+| `ANGIE_CONSOLE_ENABLED` | `no` | Serve Console Light at a secret path, normally behind basic auth. |
+| `ANGIE_ACME_ENABLED` | `no` | Configure the built-in ACME client; persist `/data` when enabled. |
+| `ANGIE_ERROR_LOG_JSON_ENABLED` | `yes` | Write error and entrypoint logs as one JSON object per line. |
+| `ANGIE_WORKER_SHUTDOWN_TIMEOUT` | `8s` | Bound graceful worker shutdown below the container stop grace period. |
 | `ANGIE_ENTRYPOINT_WORKER_PROCESSES_AUTOTUNE` | unset | Tune `worker_processes` to the CPU count at start. |
 
 Access-log variables come in two families whose names are easy to confuse - the
@@ -106,24 +123,38 @@ difference is **register** vs. **activate**:
   active access log and do **not** disable any other format.
 - `ANGIE_LOG_*` (e.g. `ANGIE_LOG_LOGFMT_GEOIP2`) **register and activate** the
   format as the access log. Activating one resets the others, so exactly one
-  access log stays active - this is what overrides the default `logfmt`. Enabling
+  access log stays active - this is what overrides the default JSON log. Enabling
   two would log every request twice.
 
 The `*_GEOIP2` variants additionally require GeoIP2 to be up (`GEOIP2_DB_COUNTRY`
 set and readable). Full table:
-[docs/configuration.md](docs/configuration.md#log-formats).
+[docs/configuration.md](docs/configuration.md#access-logs).
 
-Mount custom configuration at the **`/etc/angie/custom`** volume.
+Mount custom configuration at the **`/etc/angie/custom`** volume. Only its
+`conf.d`, `http-conf.d`, and `http.d` subdirectories are loaded.
 
 ## Data and state
 
-The image is **stateless** - all runtime config is derived from `ANGIE_*`
-variables and the `/etc/angie/custom` volume at container start; nothing is
-written that needs backing up. Configuration is applied **once at creation**, so
-changing an `ANGIE_*` variable takes effect on container **recreate**, not
-`docker restart`. The unprivileged image runs as uid/gid `65532` and owns
-`/etc/angie/*.d`; see [docs/security.md](docs/security.md) for running under a
-foreign `--user`.
+The image is stateless while ACME is disabled. At every start the entrypoint
+copies the read-only `/etc/angie` skeleton to `/data/conf`, applies `ANGIE_*`
+settings there, and keeps temporary files under `/data/tmp`. Mount user
+configuration only at `/etc/angie/custom`; do not mount `/data/conf`.
+
+A writable `/data` is required. The container layer provides it during an
+ordinary run; with `--read-only`, use `--tmpfs /data:mode=1777` or a volume.
+Use a persistent volume, not tmpfs, when ACME is enabled because `/data/acme`
+contains account keys and certificates. Changing an environment variable
+requires recreating the container. After editing the custom volume, test and
+reload the live configuration:
+
+```bash
+docker exec angie angie -p /data/conf -c angie.conf -t
+docker kill -s HUP angie
+```
+
+`angie -s reload` is unsupported because the configuration uses `pid off`.
+See [docs/usage.md](docs/usage.md) for migration from the old writable
+`/etc/angie` layout.
 
 ## Limitations
 
@@ -142,15 +173,15 @@ label (`docker inspect`) and via `angie -v`.
 
 | Tag | Meaning |
 | --- | --- |
-| `1.12.3-build1-alpine`, `...-debian` | Immutable - exact Angie version and packaging. **Pin this.** |
-| `1.12.3-alpine` | Latest build of that Angie patch. |
+| `1.12.4-build1-alpine`, `...-debian` | Immutable - exact Angie version and packaging. **Pin this.** |
+| `1.12.4-alpine` | Latest build of that Angie patch. |
 | `1.12-alpine` | Latest patch of that Angie minor line. |
 | `alpine`, `debian` | Latest stable of that base. |
 | `latest` | Latest stable **Alpine** image. |
-| `*-unprivileged` | Rootless variant; suffixes every tag above except `latest` (e.g. `alpine-unprivileged`, `1.12.3-build1-alpine-unprivileged`). |
+| `*-unprivileged` | Rootless variant; suffixes every tag above except `latest` (e.g. `alpine-unprivileged`, `1.12.4-build1-alpine-unprivileged`). |
 
 Floating tags move only for stable Angie releases; a prerelease Angie version
-(e.g. `1.12.3-rc1`) publishes its immutable `...-build<N>` tag only.
+(e.g. `1.12.4-rc1`) publishes its immutable `...-build<N>` tag only.
 
 ## Documentation
 
@@ -160,6 +191,7 @@ Floating tags move only for stable Angie releases; a prerelease Angie version
 - [Security](docs/security.md) - non-root, capabilities, secrets
 - [Limitations](docs/limitations.md) - known boundaries
 - [Troubleshooting](docs/troubleshooting.md) - common errors
+- [Architecture](docs/architecture.md) - how the images are built and why
 - [Changelog](CHANGELOG.md) - release history
 
 ## License

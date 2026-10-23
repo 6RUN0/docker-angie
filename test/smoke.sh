@@ -92,7 +92,7 @@ start() { # extra docker run args...
 wait_healthy() { # cid
   __wh_cid=$1
   for _ in $(seq 1 40); do
-    if docker exec "$__wh_cid" wget -q -O /dev/null http://127.0.0.1/healthz 2>/dev/null; then
+    if docker exec "$__wh_cid" wget -q --tries=1 -T 2 -O /dev/null http://127.0.0.1/healthz 2>/dev/null; then
       return 0
     fi
     sleep 0.5
@@ -118,7 +118,7 @@ wait_logs() { # cid needle
 }
 
 # Dump the effective, fully-resolved configuration.
-dump_conf() { docker exec "$1" angie -T 2>/dev/null; }
+dump_conf() { docker exec "$1" angie -p /data/conf -c angie.conf -T 2>/dev/null; }
 
 printf 'Smoke testing %s\n' "$IMAGE"
 
@@ -131,9 +131,9 @@ else
 fi
 # The classifier must return the body, not just a reachable status: wget -O- so a
 # regression that answers 200 with the wrong payload is caught.
-body=$(docker exec "$cid" wget -q -O - http://127.0.0.1/healthz 2>/dev/null || true)
+body=$(docker exec "$cid" wget -q --tries=1 -T 2 -O - http://127.0.0.1/healthz 2>/dev/null || true)
 assert_eq "$body" "ok" "/healthz body is exactly 'ok'"
-if docker exec "$cid" wget -q -O /dev/null http://127.0.0.1/ 2>/dev/null; then
+if docker exec "$cid" wget -q --tries=1 -T 5 -O /dev/null http://127.0.0.1/ 2>/dev/null; then
   fail "default server denies unknown host (expected 444/closed)"
 else
   pass "default server denies unknown host (444)"
@@ -143,7 +143,7 @@ fi
 # the loopback range, so spawn a separate container to probe the target IP.
 cip=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' "$cid" 2>/dev/null || true)
 if [ -n "$cip" ]; then
-  if docker run --rm --label "$SMOKE_RUN_LABEL" "$IMAGE" wget -q -O /dev/null "http://$cip/healthz" 2>/dev/null; then
+  if docker run --rm --label "$SMOKE_RUN_LABEL" "$IMAGE" wget -q --tries=1 -T 5 -O /dev/null "http://$cip/healthz" 2>/dev/null; then
     fail "/healthz reachable from another container ($cip) - must be denied"
   else
     pass "/healthz denied from external client ($cip)"
@@ -153,7 +153,9 @@ else
 fi
 # Exactly one active access_log to /dev/stdout (regression: double access_log).
 n=$(dump_conf "$cid" | grep -c 'access_log /dev/stdout' || true)
-assert_eq "$n" "1" "exactly one access_log directive (default logfmt)"
+assert_eq "$n" "1" "exactly one access_log directive (default JSON)"
+assert_contains "$(dump_conf "$cid")" "access_log /dev/stdout angie_json" \
+  "JSON is the default access log format"
 docker rm -f "$cid" >/dev/null
 
 # --- 2. gzip toggle ---------------------------------------------------------
@@ -166,7 +168,7 @@ docker rm -f "$cid" >/dev/null
 cid=$(start -e ANGIE_BROTLI_ENABLED=1)
 wait_healthy "$cid" || fail "brotli container healthy"
 assert_contains "$(dump_conf "$cid")" "brotli on" "ANGIE_BROTLI_ENABLED enables brotli"
-mods=$(docker exec "$cid" ls /etc/angie/modules.d/ 2>/dev/null || true)
+mods=$(docker exec "$cid" ls /data/conf/modules.d/ 2>/dev/null || true)
 assert_contains "$mods" "http_brotli_filter.conf" "brotli filter module enabled"
 docker rm -f "$cid" >/dev/null
 
@@ -224,7 +226,7 @@ else
   fail "WAF + subs + websocket: container starts with all three enabled"
   docker logs "$cid" 2>&1 | grep -iE 'emerg|\[error\]' | head -3 || true
 fi
-mods=$(docker exec "$cid" ls /etc/angie/modules.d/ 2>/dev/null || true)
+mods=$(docker exec "$cid" ls /data/conf/modules.d/ 2>/dev/null || true)
 assert_contains "$mods" "http_modsecurity.conf" "ANGIE_MODSECURITY_ENABLED loads the WAF module"
 assert_contains "$mods" "http_subs_filter.conf" "ANGIE_SUBS_ENABLED loads the subs module"
 assert_contains "$(dump_conf "$cid")" "connection_upgrade" "ANGIE_MAP_WEBSOCKET_ENABLED adds the websocket map"
@@ -232,20 +234,19 @@ docker rm -f "$cid" >/dev/null
 
 # --- 4e. Access-log format switch keeps exactly one access_log --------------
 # Regression guard for double access_log when a non-default format is selected.
-# logfmt is the default and is matched before main in 40-log.sh, so it must be
-# turned off explicitly for main to win.
-cid=$(start -e ANGIE_LOG_LOGFMT=no -e ANGIE_LOG_MAIN=1)
+# JSON is only the fallback, so selecting main needs no second environment flag.
+cid=$(start -e ANGIE_LOG_MAIN=1)
 wait_healthy "$cid" || fail "log-main container healthy"
 conf=$(dump_conf "$cid")
 n=$(printf '%s\n' "$conf" | grep -c 'access_log /dev/stdout' || true)
 assert_eq "$n" "1" "switching to main format keeps exactly one access_log"
-assert_contains "$conf" "access_log /dev/stdout main" "ANGIE_LOG_MAIN selects the main format"
+assert_contains "$conf" "access_log /dev/stdout angie_main" "ANGIE_LOG_MAIN selects the main format"
 docker rm -f "$cid" >/dev/null
 
 # --- 4f. worker_processes autotune rewrites `auto` to a concrete count -------
 cid=$(start -e ANGIE_ENTRYPOINT_WORKER_PROCESSES_AUTOTUNE=1)
 wait_healthy "$cid" || fail "autotune container healthy"
-wp=$(docker exec "$cid" grep -E '^worker_processes [0-9]+;' /etc/angie/angie.conf 2>/dev/null || true)
+wp=$(docker exec "$cid" grep -E '^worker_processes [1-9][0-9]*;' /data/conf/angie.conf 2>/dev/null || true)
 if [ -n "$wp" ]; then
   pass "autotune rewrites worker_processes to a number ($wp)"
 else
@@ -276,7 +277,7 @@ rm -rf "$ctmp"
 cid=$(start -e ANGIE_ZSTD_ENABLED=1)
 wait_healthy "$cid" || fail "zstd container healthy"
 assert_contains "$(dump_conf "$cid")" "zstd on" "ANGIE_ZSTD_ENABLED enables zstd"
-mods=$(docker exec "$cid" ls /etc/angie/modules.d/ 2>/dev/null || true)
+mods=$(docker exec "$cid" ls /data/conf/modules.d/ 2>/dev/null || true)
 assert_contains "$mods" "http_zstd_filter.conf" "zstd filter module enabled"
 docker rm -f "$cid" >/dev/null
 
@@ -285,7 +286,7 @@ wait_healthy "$cid" || fail "zstd_static container healthy"
 conf=$(dump_conf "$cid")
 assert_contains "$conf" "zstd_static on" "ANGIE_ZSTD_STATIC_ENABLED enables zstd_static"
 assert_contains "$conf" "zstd on" "zstd_static also pulls in base zstd"
-mods=$(docker exec "$cid" ls /etc/angie/modules.d/ 2>/dev/null || true)
+mods=$(docker exec "$cid" ls /data/conf/modules.d/ 2>/dev/null || true)
 assert_contains "$mods" "http_zstd_static.conf" "zstd static module enabled"
 docker rm -f "$cid" >/dev/null
 
@@ -298,7 +299,7 @@ assert_contains "$conf" "real_ip_header X-Forwarded-For" "real_ip_header default
 assert_contains "$conf" "real_ip_recursive on" "real_ip_recursive defaults to on"
 # /healthz must keep answering: the HEALTHCHECK hits 127.0.0.1 with no XFF, so
 # real-IP performs no rewrite and the loopback gate still passes.
-body=$(docker exec "$cid" wget -q -O - http://127.0.0.1/healthz 2>/dev/null || true)
+body=$(docker exec "$cid" wget -q --tries=1 -T 5 -O - http://127.0.0.1/healthz 2>/dev/null || true)
 assert_eq "$body" "ok" "real-ip enabled: /healthz still returns 'ok'"
 docker rm -f "$cid" >/dev/null
 
@@ -338,22 +339,22 @@ docker rm -f "$cid" >/dev/null
 cid=$(start)
 wait_healthy "$cid" || fail "orphan-heal container healthy"
 link_active "$cid" ../http-conf-available.d/030-log-format-logfmt-with-geoip2.conf \
-  /etc/angie/http-conf.d/030-log-format-logfmt-with-geoip2.conf
+  /data/conf/http-conf.d/030-log-format-logfmt-with-geoip2.conf
 link_active "$cid" ../http-conf-available.d/040-log-logfmt-with-geoip2.conf \
-  /etc/angie/http-conf.d/040-log-logfmt-with-geoip2.conf
-if docker exec "$cid" angie -t >/dev/null 2>&1; then
+  /data/conf/http-conf.d/040-log-logfmt-with-geoip2.conf
+if docker exec "$cid" angie -p /data/conf -c angie.conf -t >/dev/null 2>&1; then
   fail "sanity: orphaned geoip2 log format should break angie -t"
 else
   pass "sanity: orphaned geoip2 log format breaks angie -t"
 fi
 docker exec "$cid" sh /docker-entrypoint.d/40-log.sh >/dev/null 2>&1 || true
-if docker exec "$cid" angie -t >/dev/null 2>&1; then
+if docker exec "$cid" angie -p /data/conf -c angie.conf -t >/dev/null 2>&1; then
   pass "40-log.sh disables the geoip2 orphan, angie -t valid again"
 else
   fail "40-log.sh did not heal the geoip2 orphan"
 fi
 assert_disabled "$cid" "geoip2 log-format + access_log orphans removed" \
-  logfmt-with-geoip2.conf /etc/angie/http-conf.d/
+  logfmt-with-geoip2.conf /data/conf/http-conf.d/
 docker rm -f "$cid" >/dev/null
 
 # --- 4l. geoip2 map/module orphan self-heals when geoip2 is off -------------
@@ -365,26 +366,26 @@ cid=$(start)
 wait_healthy "$cid" || fail "geoip2 map orphan-heal container healthy"
 docker exec "$cid" sh -c '
   printf "geoip2 /nonexistent/GeoLite2-Country.mmdb {\n  auto_reload 1h;\n  \$geoip2_country_code default=ZZ source=\$remote_addr country iso_code;\n}\n" \
-    > /etc/angie/http-conf-available.d/025-geoip2.conf
-  ln -sf ../http-conf-available.d/025-geoip2.conf /etc/angie/http-conf.d/025-geoip2.conf
-  ln -sf ../modules-available.d/http_geoip2.conf /etc/angie/modules.d/http_geoip2.conf
+    > /data/conf/http-conf-available.d/025-geoip2.conf
+  ln -sf ../http-conf-available.d/025-geoip2.conf /data/conf/http-conf.d/025-geoip2.conf
+  ln -sf ../modules-available.d/http_geoip2.conf /data/conf/modules.d/http_geoip2.conf
 '
-if docker exec "$cid" angie -t >/dev/null 2>&1; then
+if docker exec "$cid" angie -p /data/conf -c angie.conf -t >/dev/null 2>&1; then
   fail "sanity: orphaned geoip2 map (gone DB) should break angie -t"
 else
   pass "sanity: orphaned geoip2 map breaks angie -t"
 fi
 # No GEOIP2_DB_COUNTRY in env: 50-geoip2.sh must clear the orphan, then early-exit.
 docker exec "$cid" sh /docker-entrypoint.d/50-geoip2.sh >/dev/null 2>&1 || true
-if docker exec "$cid" angie -t >/dev/null 2>&1; then
+if docker exec "$cid" angie -p /data/conf -c angie.conf -t >/dev/null 2>&1; then
   pass "50-geoip2.sh disables the map/module orphan, angie -t valid again"
 else
   fail "50-geoip2.sh did not heal the geoip2 map orphan"
 fi
 assert_disabled "$cid" "geoip2 map orphan removed" \
-  025-geoip2.conf /etc/angie/http-conf.d/
+  025-geoip2.conf /data/conf/http-conf.d/
 assert_disabled "$cid" "geoip2 module orphan removed" \
-  http_geoip2.conf /etc/angie/modules.d/
+  http_geoip2.conf /data/conf/modules.d/
 docker rm -f "$cid" >/dev/null
 
 # --- 4m. real-ip orphan is cleared when ANGIE_REAL_IP_FROM is removed --------
@@ -396,12 +397,12 @@ cid=$(start)
 wait_healthy "$cid" || fail "real-ip orphan-heal container healthy"
 docker exec "$cid" sh -c '
   printf "real_ip_header X-Forwarded-For;\nset_real_ip_from 203.0.113.0/24;\n" \
-    > /etc/angie/http-conf-available.d/015-real-ip.conf
-  ln -sf ../http-conf-available.d/015-real-ip.conf /etc/angie/http-conf.d/015-real-ip.conf
+    > /data/conf/http-conf-available.d/015-real-ip.conf
+  ln -sf ../http-conf-available.d/015-real-ip.conf /data/conf/http-conf.d/015-real-ip.conf
 '
 docker exec "$cid" sh /docker-entrypoint.d/35-real-ip.sh >/dev/null 2>&1 || true
 assert_disabled "$cid" "35-real-ip.sh clears the stale trusted-proxy orphan" \
-  015-real-ip.conf /etc/angie/http-conf.d/
+  015-real-ip.conf /data/conf/http-conf.d/
 docker rm -f "$cid" >/dev/null
 
 # --- 4n. declarative reset: brotli config + module orphan cleared when off ---
@@ -412,15 +413,15 @@ docker rm -f "$cid" >/dev/null
 cid=$(start)
 wait_healthy "$cid" || fail "brotli reset container healthy"
 link_active "$cid" ../http-conf-available.d/020-brotli.conf \
-  /etc/angie/http-conf.d/020-brotli.conf
+  /data/conf/http-conf.d/020-brotli.conf
 link_active "$cid" ../modules-available.d/http_brotli_filter.conf \
-  /etc/angie/modules.d/http_brotli_filter.conf
+  /data/conf/modules.d/http_brotli_filter.conf
 docker exec "$cid" sh /docker-entrypoint.d/40-brotli.sh >/dev/null 2>&1 || true
 assert_disabled "$cid" "40-brotli.sh resets the brotli config orphan" \
-  020-brotli.conf /etc/angie/http-conf.d/
+  020-brotli.conf /data/conf/http-conf.d/
 assert_disabled "$cid" "40-brotli.sh resets the brotli module orphan" \
-  http_brotli_filter.conf /etc/angie/modules.d/
-if docker exec "$cid" angie -t >/dev/null 2>&1; then
+  http_brotli_filter.conf /data/conf/modules.d/
+if docker exec "$cid" angie -p /data/conf -c angie.conf -t >/dev/null 2>&1; then
   pass "config valid after brotli reset"
 else
   fail "config invalid after brotli reset"
@@ -440,10 +441,10 @@ docker rm -f "$cid" >/dev/null
 cid=$(start -e ANGIE_GZIP_ENABLED=1)
 wait_healthy "$cid" || fail "full-startup orphan container healthy"
 link_active "$cid" ../http-conf-available.d/030-log-format-logfmt-with-geoip2.conf \
-  /etc/angie/http-conf.d/030-log-format-logfmt-with-geoip2.conf
+  /data/conf/http-conf.d/030-log-format-logfmt-with-geoip2.conf
 link_active "$cid" ../http-conf-available.d/040-log-logfmt-with-geoip2.conf \
-  /etc/angie/http-conf.d/040-log-logfmt-with-geoip2.conf
-if docker exec "$cid" angie -t >/dev/null 2>&1; then
+  /data/conf/http-conf.d/040-log-logfmt-with-geoip2.conf
+if docker exec "$cid" angie -p /data/conf -c angie.conf -t >/dev/null 2>&1; then
   fail "sanity: injected geoip2 orphan should break angie -t"
 else
   pass "sanity: injected geoip2 orphan breaks angie -t"
@@ -456,14 +457,14 @@ if docker exec "$cid" sh -c 'set -e; for f in /docker-entrypoint.d/*.sh; do [ -x
 else
   fail "full entrypoint replay aborted (an early toggle tripped over the geoip2 orphan)"
 fi
-if docker exec "$cid" angie -t >/dev/null 2>&1; then
+if docker exec "$cid" angie -p /data/conf -c angie.conf -t >/dev/null 2>&1; then
   pass "assembled config valid after full replay; orphan cleared, gzip on"
 else
   fail "assembled config invalid after full replay"
 fi
 assert_contains "$(dump_conf "$cid")" "gzip on" "gzip still enabled after full replay"
 assert_disabled "$cid" "geoip2 orphan removed by full replay" \
-  logfmt-with-geoip2.conf /etc/angie/http-conf.d/
+  logfmt-with-geoip2.conf /data/conf/http-conf.d/
 docker rm -f "$cid" >/dev/null
 
 # --- 4p. declarative reset: brotli stays on when its variable is set ---------
@@ -471,7 +472,7 @@ docker rm -f "$cid" >/dev/null
 # 40-brotli.sh re-enables config + module after the initial reset.
 cid=$(start -e ANGIE_BROTLI_ENABLED=1)
 wait_healthy "$cid" || fail "brotli enabled container healthy"
-en=$(docker exec "$cid" sh -c 'ls /etc/angie/http-conf.d/ /etc/angie/modules.d/ 2>/dev/null' || true)
+en=$(docker exec "$cid" sh -c 'ls /data/conf/http-conf.d/ /data/conf/modules.d/ 2>/dev/null' || true)
 assert_contains "$en" 020-brotli.conf \
   "40-brotli.sh re-enables brotli when ANGIE_BROTLI_ENABLED is set"
 docker rm -f "$cid" >/dev/null
@@ -482,7 +483,7 @@ docker rm -f "$cid" >/dev/null
 # in-container view, the off-by-default posture, and 444 for non-API URIs.
 cid=$(start)
 wait_healthy "$cid" || fail "status-api default-off container healthy"
-if docker exec "$cid" wget -q -O /dev/null http://127.0.0.1:8181/status/ 2>/dev/null; then
+if docker exec "$cid" wget -q --tries=1 -T 5 -O /dev/null http://127.0.0.1:8181/status/ 2>/dev/null; then
   fail "status API is off by default (8181 unexpectedly open)"
 else
   pass "status API is off by default (8181 closed)"
@@ -491,17 +492,17 @@ docker rm -f "$cid" >/dev/null
 
 cid=$(start -e ANGIE_STATUS_API_ENABLED=1)
 wait_healthy "$cid" || fail "status-api container healthy"
-status_json=$(docker exec "$cid" wget -q -O - http://127.0.0.1:8181/status/ 2>/dev/null || true)
+status_json=$(docker exec "$cid" wget -q --tries=1 -T 5 -O - http://127.0.0.1:8181/status/ 2>/dev/null || true)
 assert_contains "$status_json" '"angie"' "status API serves /status/ JSON"
 assert_contains "$status_json" '"connections"' "/status/ JSON includes the connections section"
-if docker exec "$cid" wget -q -O /dev/null http://127.0.0.1:8181/other 2>/dev/null; then
+if docker exec "$cid" wget -q --tries=1 -T 5 -O /dev/null http://127.0.0.1:8181/other 2>/dev/null; then
   fail "non-API URI on the status listener is closed (expected 444)"
 else
   pass "non-API URI on the status listener is closed (444)"
 fi
 cip=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' "$cid" 2>/dev/null || true)
 if [ -n "$cip" ]; then
-  metrics=$(docker run --rm --label "$SMOKE_RUN_LABEL" "$IMAGE" wget -q -O - "http://$cip:8181/metrics" 2>/dev/null || true)
+  metrics=$(docker run --rm --label "$SMOKE_RUN_LABEL" "$IMAGE" wget -q --tries=1 -T 5 -O - "http://$cip:8181/metrics" 2>/dev/null || true)
   assert_contains "$metrics" "angie_connections_accepted" \
     "Prometheus /metrics reachable from the Docker network"
 else
@@ -511,13 +512,13 @@ fi
 # the listener snippet (persistent /etc/angie volume semantics).
 docker exec -e ANGIE_STATUS_API_ENABLED=no "$cid" sh /docker-entrypoint.d/40-status-api.sh >/dev/null 2>&1 || true
 assert_disabled "$cid" "status API snippet reset when disabled" \
-  070-status-api.conf /etc/angie/http-conf.d/
+  070-status-api.conf /data/conf/http-conf.d/
 docker rm -f "$cid" >/dev/null
 
 # --- 4q'. Status API on a custom host:port -----------------------------------
 cid=$(start -e ANGIE_STATUS_API_ENABLED=1 -e ANGIE_STATUS_API_HOST=127.0.0.1 -e ANGIE_STATUS_API_PORT=9191)
 wait_healthy "$cid" || fail "status-api custom-port container healthy"
-status_json=$(docker exec "$cid" wget -q -O - http://127.0.0.1:9191/status/ 2>/dev/null || true)
+status_json=$(docker exec "$cid" wget -q --tries=1 -T 5 -O - http://127.0.0.1:9191/status/ 2>/dev/null || true)
 assert_contains "$status_json" '"angie"' "ANGIE_STATUS_API_HOST/PORT move the status listener"
 docker rm -f "$cid" >/dev/null
 
@@ -553,12 +554,12 @@ CONF
 chmod 755 "$etmp" # see section 9: workers must traverse the mounted dir
 cid=$(start -e ANGIE_ERROR_LOG_JSON_ENABLED=1 -v "$etmp:/etc/angie/custom/http.d:ro")
 wait_healthy "$cid" || fail "error-log-json container healthy"
-if docker exec "$cid" grep -qx 'error_log /dev/stderr format=json;' /etc/angie/angie.conf 2>/dev/null; then
+if docker exec "$cid" grep -qx 'error_log /dev/stderr format=json;' /data/conf/angie.conf 2>/dev/null; then
   pass "ANGIE_ERROR_LOG_JSON_ENABLED rewrites the error_log line"
 else
   fail "ANGIE_ERROR_LOG_JSON_ENABLED rewrites the error_log line"
 fi
-docker exec "$cid" wget -q -O /dev/null http://127.0.0.1:8083/ 2>/dev/null || true
+docker exec "$cid" wget -q --tries=1 -T 5 -O /dev/null http://127.0.0.1:8083/ 2>/dev/null || true
 # wait_logs reads the stdout stream only; error_log goes to stderr, so poll the
 # combined streams here with the same cadence.
 errline=""
@@ -572,7 +573,7 @@ assert_contains "$errline" '"message":"connect() failed"' \
 # Declarative revert: running the toggle with the variable off must restore the
 # plain line (persistent /etc/angie volume semantics).
 docker exec -e ANGIE_ERROR_LOG_JSON_ENABLED=no "$cid" sh /docker-entrypoint.d/31-error-log-json.sh >/dev/null 2>&1 || true
-if docker exec "$cid" grep -qx 'error_log /dev/stderr;' /etc/angie/angie.conf 2>/dev/null; then
+if docker exec "$cid" grep -qx 'error_log /dev/stderr;' /data/conf/angie.conf 2>/dev/null; then
   pass "error_log toggle reverts to the plain format"
 else
   fail "error_log toggle reverts to the plain format"
@@ -597,16 +598,15 @@ else
   fail "failing entrypoint script aborts startup (got exit $rc; 124=timeout means it started anyway)"
 fi
 
-# --- 6. Non-root: the default image refuses to start (requires root) --------
-# The default image binds :80 and uses root-owned pid/temp paths, so it cannot
-# run under --user. The entrypoint must fail fast with a clear message instead of
-# letting angie crash later with an opaque EACCES. (Rootless = unprivileged image.)
+# --- 6. Non-root: the default image refuses privileged port 80 ---------------
+# The default image binds :80, so its master must start as root. The entrypoint
+# must fail fast with a useful image choice instead of an opaque EACCES.
 set +e
 logs=$(docker run --rm --label "$SMOKE_RUN_LABEL" --user 1000:1000 "$IMAGE" 2>&1)
 rc=$?
 set -e
-assert_contains "$logs" "requires root" \
-  "non-root: entrypoint fails fast with a clear 'requires root' message"
+assert_contains "$logs" "requires a root master for port 80" \
+  "non-root: entrypoint explains why privileged port 80 needs root"
 if [ "$rc" -ne 0 ]; then
   pass "non-root: default image refuses to start (exit $rc)"
 else
@@ -636,25 +636,25 @@ assert_contains "$runtime_ver" "Angie/$pin_alpine" \
 cid=$(start)
 wait_healthy "$cid" || fail "angie-ctl contract container healthy"
 if docker exec "$cid" angie-ctl httpconf en 060-map-websocket.conf >/dev/null 2>&1 &&
-  docker exec "$cid" test -e /etc/angie/http-conf.d/060-map-websocket.conf; then
+  docker exec "$cid" test -e /data/conf/http-conf.d/060-map-websocket.conf; then
   pass "angie-ctl httpconf en creates the active symlink"
 else
   fail "angie-ctl httpconf en creates the active symlink"
 fi
 if docker exec "$cid" angie-ctl httpconf dis 060-map-websocket.conf >/dev/null 2>&1 &&
-  ! docker exec "$cid" test -e /etc/angie/http-conf.d/060-map-websocket.conf; then
+  ! docker exec "$cid" test -e /data/conf/http-conf.d/060-map-websocket.conf; then
   pass "angie-ctl httpconf dis removes the active symlink"
 else
   fail "angie-ctl httpconf dis removes the active symlink"
 fi
 if docker exec "$cid" angie-ctl mod en http_subs_filter.conf >/dev/null 2>&1 &&
-  docker exec "$cid" test -e /etc/angie/modules.d/http_subs_filter.conf; then
+  docker exec "$cid" test -e /data/conf/modules.d/http_subs_filter.conf; then
   pass "angie-ctl mod en creates the module symlink"
 else
   fail "angie-ctl mod en creates the module symlink"
 fi
 if docker exec "$cid" angie-ctl mod dis http_subs_filter.conf >/dev/null 2>&1 &&
-  ! docker exec "$cid" test -e /etc/angie/modules.d/http_subs_filter.conf; then
+  ! docker exec "$cid" test -e /data/conf/modules.d/http_subs_filter.conf; then
   pass "angie-ctl mod dis removes the module symlink"
 else
   fail "angie-ctl mod dis removes the module symlink"
@@ -686,18 +686,18 @@ cid=$(start -e ANGIE_GZIP_ENABLED=1 -e ANGIE_BROTLI_ENABLED=1 -e ANGIE_ZSTD_ENAB
   -v "$ctmp:/etc/angie/custom/http.d:ro")
 wait_healthy "$cid" || fail "compression container healthy"
 plain=$(docker exec "$cid" sh -c \
-  'wget -q -O /tmp/plain http://127.0.0.1:8080/big.txt && wc -c </tmp/plain' || true)
+  'wget -q --tries=1 -T 5 -O /tmp/plain http://127.0.0.1:8080/big.txt && wc -c </tmp/plain' || true)
 assert_eq "$((plain))" "4096" "control fetch without Accept-Encoding is uncompressed (4096 bytes)"
 magic=$(docker exec "$cid" sh -c \
-  'wget -q -O /tmp/gz --header "Accept-Encoding: gzip" http://127.0.0.1:8080/big.txt \
+  'wget -q --tries=1 -T 5 -O /tmp/gz --header "Accept-Encoding: gzip" http://127.0.0.1:8080/big.txt \
     && od -An -tx1 -N2 /tmp/gz' | tr -d ' \n' || true)
 assert_eq "$magic" "1f8b" "Accept-Encoding: gzip gets a gzip body (magic 1f8b)"
 magic=$(docker exec "$cid" sh -c \
-  'wget -q -O /tmp/zst --header "Accept-Encoding: zstd" http://127.0.0.1:8080/big.txt \
+  'wget -q --tries=1 -T 5 -O /tmp/zst --header "Accept-Encoding: zstd" http://127.0.0.1:8080/big.txt \
     && od -An -tx1 -N4 /tmp/zst' | tr -d ' \n' || true)
 assert_eq "$magic" "28b52ffd" "Accept-Encoding: zstd gets a zstd body (magic 28b52ffd)"
 brsize=$(docker exec "$cid" sh -c \
-  'wget -q -O /tmp/br --header "Accept-Encoding: br" http://127.0.0.1:8080/big.txt \
+  'wget -q --tries=1 -T 5 -O /tmp/br --header "Accept-Encoding: br" http://127.0.0.1:8080/big.txt \
     && wc -c </tmp/br' || true)
 if [ -n "$brsize" ] && [ "$((brsize))" -gt 0 ] && [ "$((brsize))" -lt 4096 ]; then
   pass "Accept-Encoding: br gets a compressed body ($((brsize)) < 4096 bytes)"
@@ -727,9 +727,9 @@ CONF
 chmod 755 "$wtmp" # see section 9: workers must traverse the mounted docroot
 cid=$(start -e ANGIE_MODSECURITY_ENABLED=1 -v "$wtmp:/etc/angie/custom/http.d:ro")
 wait_healthy "$cid" || fail "modsecurity container healthy"
-body=$(docker exec "$cid" wget -q -O - http://127.0.0.1:8081/probe.txt 2>/dev/null || true)
+body=$(docker exec "$cid" wget -q --tries=1 -T 5 -O - http://127.0.0.1:8081/probe.txt 2>/dev/null || true)
 assert_eq "$body" "waf-ok" "benign request passes through ModSecurity"
-if docker exec "$cid" wget -q -O /dev/null 'http://127.0.0.1:8081/probe.txt?probe=attack' 2>/dev/null; then
+if docker exec "$cid" wget -q --tries=1 -T 5 -O /dev/null 'http://127.0.0.1:8081/probe.txt?probe=attack' 2>/dev/null; then
   fail "ModSecurity denies the matching request (expected 403)"
 else
   pass "ModSecurity denies the matching request (403)"
@@ -746,7 +746,7 @@ rm -rf "$wtmp"
 htmp=$(mktemp -d)
 hconf=$(mktemp -d)
 tmpdirs="$tmpdirs $htmp $hconf"
-printf 'hdr-ok\n' >"$htmp/probe.txt"
+printf '<p>hdr-ok</p>\n' >"$htmp/probe.html"
 cat >"$htmp/vhost.conf" <<'CONF'
 server {
   listen 8082;
@@ -765,12 +765,12 @@ chmod 755 "$htmp" "$hconf" # see section 9: workers must traverse the docroot
 cid=$(start -e ANGIE_SECURITY_HEADERS_ENABLED=1 \
   -v "$htmp:/etc/angie/custom/http.d:ro" -v "$hconf:/etc/angie/custom/http-conf.d:ro")
 wait_healthy "$cid" || fail "security-headers wire container healthy"
-docker exec "$cid" wget -q -O /dev/null http://127.0.0.1:8082/probe.txt 2>/dev/null || true
+docker exec "$cid" wget -q --tries=1 -T 5 -O /dev/null http://127.0.0.1:8082/probe.html 2>/dev/null || true
 hdrline=$(wait_logs "$cid" "hdrprobe " | grep '^hdrprobe ' | tail -1 || true)
 assert_contains "$hdrline" "xcto=nosniff" "wire: X-Content-Type-Options reaches the client"
 assert_contains "$hdrline" "xfo=SAMEORIGIN" "wire: X-Frame-Options reaches the client"
 assert_contains "$hdrline" "rp=strict-origin-when-cross-origin" "wire: Referrer-Policy reaches the client"
-assert_contains "$hdrline" 'pp="camera=(), microphone=(), geolocation=()"' \
+assert_contains "$hdrline" 'pp="accelerometer=(),autoplay=(),browsing-topics=(),camera=()' \
   "wire: Permissions-Policy reaches the client"
 docker rm -f "$cid" >/dev/null
 rm -rf "$htmp" "$hconf"
@@ -778,10 +778,11 @@ rm -rf "$htmp" "$hconf"
 # --- 12. Access log reaches `docker logs` ------------------------------------
 # The whole logging chain: access_log /dev/stdout -> angie -> tini -> container
 # stdout. /healthz has access_log off, so probe / (444; the closed connection is
-# still logged) and expect a logfmt line on stdout.
-cid=$(start)
+# still logged). Select logfmt explicitly; the default JSON path is covered by
+# the base and layout tests.
+cid=$(start -e ANGIE_LOG_LOGFMT=1)
 wait_healthy "$cid" || fail "access-log container healthy"
-docker exec "$cid" wget -q -O /dev/null http://127.0.0.1/ 2>/dev/null || true
+docker exec "$cid" wget -q --tries=1 -T 5 -O /dev/null http://127.0.0.1/ 2>/dev/null || true
 stdout_logs=$(wait_logs "$cid" "status=444")
 assert_contains "$stdout_logs" "status=444" "access log line for the denied request reaches docker logs"
 assert_contains "$stdout_logs" "remote_addr=127.0.0.1" "access log line carries remote_addr in logfmt"
@@ -793,11 +794,12 @@ docker rm -f "$cid" >/dev/null
 # X-Forwarded-For must become $remote_addr in the access log. TEST-NET-3
 # (203.0.113.0/24) can never appear as a real peer address, so seeing it logged
 # proves the rewrite happened.
-cid=$(start -e ANGIE_REAL_IP_FROM=172.16.0.0/12,192.168.0.0/16,10.0.0.0/8)
+cid=$(start -e ANGIE_LOG_LOGFMT=1 \
+  -e ANGIE_REAL_IP_FROM=172.16.0.0/12,192.168.0.0/16,10.0.0.0/8)
 wait_healthy "$cid" || fail "real-ip wire container healthy"
 cip=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' "$cid" 2>/dev/null || true)
 if [ -n "$cip" ]; then
-  timeout 30 docker run --rm --label "$SMOKE_RUN_LABEL" "$IMAGE" wget -q -O /dev/null \
+  timeout 30 docker run --rm --label "$SMOKE_RUN_LABEL" "$IMAGE" wget -q --tries=1 -T 5 -O /dev/null \
     --header 'X-Forwarded-For: 203.0.113.7' "http://$cip/" 2>/dev/null || true
   assert_contains "$(wait_logs "$cid" "remote_addr=203.0.113.7")" "remote_addr=203.0.113.7" \
     "trusted proxy's X-Forwarded-For rewrites the logged remote_addr"
@@ -806,7 +808,7 @@ else
 fi
 docker rm -f "$cid" >/dev/null
 
-# --- 14. Persistent /etc/angie volume: feature off after recreate ------------
+# --- 14. Persistent /data volume: feature off after recreate -----------------
 # End-to-end version of the 4k-4n orphan drills: a NAMED volume is populated
 # from the image on first use and then outlives the container. Enable brotli in
 # run one; recreate without the variable and the declarative reset must turn it
@@ -815,47 +817,123 @@ docker rm -f "$cid" >/dev/null
 vol="angie-smoke-$$"
 docker volume create "$vol" >/dev/null
 vols="$vols $vol"
-cid=$(start -v "$vol:/etc/angie" -e ANGIE_BROTLI_ENABLED=1)
+cid=$(start -v "$vol:/data" -e ANGIE_BROTLI_ENABLED=1)
 wait_healthy "$cid" || fail "persistent-volume first run healthy"
 assert_contains "$(dump_conf "$cid")" "brotli on" "persistent volume: first run enables brotli"
 docker rm -f "$cid" >/dev/null
-cid=$(start -v "$vol:/etc/angie")
+cid=$(start -v "$vol:/data")
 if wait_healthy "$cid"; then
   pass "persistent volume: recreate without the variable stays healthy"
 else
   fail "persistent volume: recreate without the variable stays healthy"
 fi
 assert_disabled "$cid" "persistent volume: brotli is off again after recreate" \
-  020-brotli.conf /etc/angie/http-conf.d/
+  020-brotli.conf /data/conf/http-conf.d/
 docker rm -f "$cid" >/dev/null
 docker volume rm "$vol" >/dev/null 2>&1 || true
 
-# --- 15. Graceful shutdown: docker stop is fast and exits 0 ------------------
-# tini must forward SIGTERM to the angie master (fast shutdown, exit 0). A
-# broken signal path surfaces as the 10s docker kill timeout and exit 137.
-cid=$(start)
+# --- 15. Graceful shutdown: an in-flight response survives docker stop ------
+# STOPSIGNAL is SIGQUIT: workers finish open requests, the master exits 0.
+# SIGTERM (the docker default) is a fast shutdown for angie and cuts a body
+# mid-way, so the probe tells them apart by the byte count. limit_rate keeps
+# 300 KiB in flight for three seconds. The body streams to a file on the HOST
+# through docker exec stdout: once tini exits the kernel kills everything in
+# the pid namespace, and an in-container counter might never print. The stop
+# is sent once the first bytes arrive, not after a fixed pause, or a slow
+# runner closes the listeners before the client connects.
+#
+# The second probe pins worker_shutdown_timeout (8s in angie.conf): 1 MiB at
+# 1 KiB/s outlasts any wait, and without the limit docker would SIGKILL (exit
+# 137). `-t 20` leaves margin over the limit; the lower time bound proves the
+# worker waited instead of being killed at once.
+stmp=$(mktemp -d)
+tmpdirs="$tmpdirs $stmp"
+head -c 307200 /dev/zero | tr '\0' 'a' >"$stmp/slow.bin"
+head -c 1048576 /dev/zero | tr '\0' 'b' >"$stmp/endless.bin"
+cat >"$stmp/vhost.conf" <<'CONF'
+server {
+  listen 8087;
+  root /etc/angie/custom/http.d;
+  location = /slow.bin { limit_rate 100k; }
+  location = /endless.bin { limit_rate 1k; }
+}
+CONF
+chmod 755 "$stmp"
+chmod 644 "$stmp"/*
+wait_first_bytes() { # path
+  for _ in $(seq 1 60); do
+    [ -s "$1" ] && return 0
+    sleep 0.5
+  done
+  return 1
+}
+cid=$(start -v "$stmp:/etc/angie/custom/http.d:ro")
 wait_healthy "$cid" || fail "graceful-stop container healthy"
+docker exec "$cid" wget -q --tries=1 -O - http://127.0.0.1:8087/slow.bin >"$stmp/slow.got" 2>/dev/null &
+client_pid=$!
+wait_first_bytes "$stmp/slow.got" || fail "graceful-stop: the slow response started streaming"
 stop_start=$(date +%s)
 docker stop -t 10 "$cid" >/dev/null
 stop_elapsed=$(($(date +%s) - stop_start))
+wait "$client_pid" || true
+assert_eq "$(wc -c <"$stmp/slow.got" | tr -d ' ')" "307200" \
+  "docker stop: the in-flight response completes (307200 bytes)"
 stop_rc=$(docker inspect -f '{{.State.ExitCode}}' "$cid")
-if [ "$stop_rc" = "0" ] && [ "$stop_elapsed" -le 5 ]; then
-  pass "docker stop: SIGTERM shuts angie down cleanly (exit 0 in ${stop_elapsed}s)"
+if [ "$stop_rc" = "0" ] && [ "$stop_elapsed" -le 9 ]; then
+  pass "docker stop: SIGQUIT drains and exits 0 (in ${stop_elapsed}s)"
 else
-  fail "docker stop: expected exit 0 within 5s, got exit $stop_rc in ${stop_elapsed}s"
+  fail "docker stop: expected exit 0 within 9s, got exit $stop_rc in ${stop_elapsed}s"
 fi
 docker rm -f "$cid" >/dev/null
 
-# --- 16. angie -s reload keeps the server serving ----------------------------
+cid=$(start -v "$stmp:/etc/angie/custom/http.d:ro")
+wait_healthy "$cid" || fail "shutdown-timeout container healthy"
+docker exec "$cid" wget -q --tries=1 -O - http://127.0.0.1:8087/endless.bin >"$stmp/endless.got" 2>/dev/null &
+client_pid=$!
+wait_first_bytes "$stmp/endless.got" || fail "shutdown-timeout: the endless response started streaming"
+stop_start=$(date +%s)
+docker stop -t 20 "$cid" >/dev/null
+stop_elapsed=$(($(date +%s) - stop_start))
+wait "$client_pid" || true
+stop_rc=$(docker inspect -f '{{.State.ExitCode}}' "$cid")
+if [ "$stop_rc" = "0" ] && [ "$stop_elapsed" -ge 7 ]; then
+  pass "docker stop: worker_shutdown_timeout ends a never-ending response with exit 0 (in ${stop_elapsed}s)"
+else
+  fail "docker stop: expected exit 0 after >=7s from worker_shutdown_timeout, got exit $stop_rc in ${stop_elapsed}s"
+fi
+docker rm -f "$cid" >/dev/null
+
+# The variable rewrites the line in place; garbage is refused before angie -t so
+# the refusal names the variable. Zero is refused on its own: for angie it
+# means "no limit", and docker would SIGKILL at the grace period.
+cid=$(start -e ANGIE_WORKER_SHUTDOWN_TIMEOUT=3s)
+wait_healthy "$cid" || fail "shutdown-timeout-override container healthy"
+if docker exec "$cid" grep -qx 'worker_shutdown_timeout 3s;' /data/conf/angie.conf 2>/dev/null; then
+  pass "ANGIE_WORKER_SHUTDOWN_TIMEOUT rewrites the worker_shutdown_timeout line"
+else
+  fail "ANGIE_WORKER_SHUTDOWN_TIMEOUT rewrites the worker_shutdown_timeout line"
+fi
+docker rm -f "$cid" >/dev/null
+for bad in '8s; bad' 0s; do
+  logs=$(timeout 30 docker run --rm --label "$SMOKE_RUN_LABEL" -e "ANGIE_WORKER_SHUTDOWN_TIMEOUT=$bad" "$IMAGE" 2>&1 || true)
+  case "$bad" in
+  0s) needle="ANGIE_WORKER_SHUTDOWN_TIMEOUT must be positive" ;;
+  *) needle="ANGIE_WORKER_SHUTDOWN_TIMEOUT must be a number with an optional unit" ;;
+  esac
+  assert_contains "$logs" "$needle" "ANGIE_WORKER_SHUTDOWN_TIMEOUT='$bad' is refused by name"
+done
+rm -rf "$stmp"
+
+# --- 16. SIGHUP reload keeps the server serving -------------------------------
 cid=$(start)
 wait_healthy "$cid" || fail "reload container healthy"
-if docker exec "$cid" angie -s reload 2>/dev/null; then
-  pass "angie -s reload accepted"
+if docker kill --signal HUP "$cid" >/dev/null 2>&1; then
+  pass "container accepts SIGHUP reload"
 else
-  fail "angie -s reload accepted"
+  fail "container accepts SIGHUP reload"
 fi
 sleep 1
-body=$(docker exec "$cid" wget -q -O - http://127.0.0.1/healthz 2>/dev/null || true)
+body=$(docker exec "$cid" wget -q --tries=1 -T 2 -O - http://127.0.0.1/healthz 2>/dev/null || true)
 assert_eq "$body" "ok" "/healthz still answers after reload"
 docker rm -f "$cid" >/dev/null
 
@@ -915,12 +993,137 @@ assert_eq "$out" "config-phase-skipped" "non-angie CMD execs directly with no en
 if [ "$(nproc)" -ge 2 ]; then
   cid=$(start --cpus=1.5 -e ANGIE_ENTRYPOINT_WORKER_PROCESSES_AUTOTUNE=1)
   wait_healthy "$cid" || fail "autotune quota container healthy"
-  wp=$(docker exec "$cid" grep -E '^worker_processes' /etc/angie/angie.conf 2>/dev/null || true)
+  wp=$(docker exec "$cid" grep -E '^worker_processes' /data/conf/angie.conf 2>/dev/null || true)
   assert_eq "$wp" "worker_processes 2;" "--cpus=1.5 rounds up to worker_processes 2"
   docker rm -f "$cid" >/dev/null
 else
   printf '  skip autotune quota assertion (single-CPU host)\n'
 fi
+
+# --- 22. /data/tmp is root-owned and rebuilt on every start ------------------
+# The root master chowns each temp path to the worker, following links. Were
+# the parent worker-writable, a compromised worker could swap a temp dir for a
+# link to a root file and have it handed over on the next reload or restart. A
+# stale worker-planted entry on a persistent volume must not survive a start.
+vol="angie-smoke-tmp-$$"
+docker volume create "$vol" >/dev/null
+vols="$vols $vol"
+docker run --rm --label "$SMOKE_RUN_LABEL" -u 0 -v "$vol:/data" --entrypoint sh "$IMAGE" \
+  -c 'mkdir -p /data/tmp && chmod 1777 /data/tmp && ln -s /docker-entrypoint.sh /data/tmp/client_temp'
+cid=$(start -v "$vol:/data")
+wait_healthy "$cid" || fail "stale /data/tmp container healthy"
+assert_eq "$(docker exec "$cid" stat -c '%u %a' /data/tmp)" "0 755" \
+  "/data/tmp is root-owned 0755 in the root image"
+assert_eq "$(docker exec "$cid" stat -c '%U' /docker-entrypoint.sh)" "root" \
+  "a temp-path link planted before start does not hand a root file to the worker"
+if docker exec "$cid" test -L /data/tmp/client_temp; then
+  fail "a stale /data/tmp entry is cleared at start"
+else
+  pass "a stale /data/tmp entry is cleared at start"
+fi
+docker rm -f "$cid" >/dev/null
+# /data/tmp as its own mount point: the rebuild must clean contents, since
+# removing the directory itself fails with EBUSY.
+cid=$(start --tmpfs /data/tmp)
+if wait_healthy "$cid"; then
+  pass "a separately mounted /data/tmp starts"
+else
+  fail "a separately mounted /data/tmp starts"
+fi
+assert_eq "$(docker exec "$cid" stat -c '%u %a' /data/tmp)" "0 755" \
+  "a mounted /data/tmp is reset to root-owned 0755"
+docker rm -f "$cid" >/dev/null
+
+# --- 23. CACHE_DIR is chowned to the worker without following links -----------
+# 90-fix-cache-permission.sh hands a mounted cache to the angie worker. chown
+# dereferences by default, so a link inside the mount must be skipped, never
+# followed to a root-owned file elsewhere in the image.
+vol="angie-smoke-cache-$$"
+docker volume create "$vol" >/dev/null
+vols="$vols $vol"
+docker run --rm --label "$SMOKE_RUN_LABEL" -u 0 -v "$vol:/cache" --entrypoint sh "$IMAGE" \
+  -c 'mkdir /cache/ab && : >/cache/ab/entry && ln -s /docker-entrypoint.sh /cache/link'
+cid=$(start -v "$vol:/cache" -e CACHE_DIR=/cache)
+wait_healthy "$cid" || fail "CACHE_DIR container healthy"
+assert_eq "$(docker exec "$cid" stat -c '%U' /cache/ab/entry)" "angie" \
+  "CACHE_DIR contents are chowned to the angie worker"
+assert_eq "$(docker exec "$cid" stat -c '%U' /docker-entrypoint.sh)" "root" \
+  "CACHE_DIR chown does not follow a link out of the cache"
+docker rm -f "$cid" >/dev/null
+
+# --- 24. htpasswd files in the custom mount become readable by the worker ------
+# Workers read auth_basic_user_file at request time, so a root-owned 0600 file
+# would fail every authenticated request. A read-only mount only warns.
+vol="angie-smoke-htpasswd-$$"
+docker volume create "$vol" >/dev/null
+vols="$vols $vol"
+docker run --rm --label "$SMOKE_RUN_LABEL" -u 0 -v "$vol:/custom" --entrypoint sh "$IMAGE" \
+  -c ': >/custom/site.htpasswd && chmod 600 /custom/site.htpasswd'
+cid=$(start -v "$vol:/etc/angie/custom")
+wait_healthy "$cid" || fail "htpasswd container healthy"
+assert_eq "$(docker exec "$cid" stat -c '%U' /etc/angie/custom/site.htpasswd)" "angie" \
+  "htpasswd files under /etc/angie/custom are chowned to the angie worker"
+docker rm -f "$cid" >/dev/null
+# Back to root so the read-only run actually attempts, and fails, the chown.
+docker run --rm --label "$SMOKE_RUN_LABEL" -u 0 -v "$vol:/custom" --entrypoint sh "$IMAGE" \
+  -c 'chown 0:0 /custom/site.htpasswd'
+cid=$(start -v "$vol:/etc/angie/custom:ro")
+if wait_healthy "$cid"; then
+  pass "a read-only custom mount with htpasswd files still starts"
+else
+  fail "a read-only custom mount with htpasswd files still starts"
+fi
+assert_contains "$(docker logs "$cid" 2>&1)" "could not chown htpasswd files" \
+  "a read-only custom mount warns that htpasswd ownership was not fixed"
+docker rm -f "$cid" >/dev/null
+
+# --- 25. ACME state dir: root-owned 0700 under /data, survives recreate -------
+# The root master creates acme_client_path itself; account keys and private
+# keys live there, so the mode is pinned against a "fix" that widens it. The
+# root master, not the angie worker, owns the keys; issuance against a real CA
+# is left to test/acme-e2e.sh.
+# The state must outlive the container: the start-time wipe covers /data/conf
+# only, or a certificate would be ordered again on every start.
+vol="angie-smoke-acme-$$"
+docker volume create "$vol" >/dev/null
+vols="$vols $vol"
+cid=$(start -v "$vol:/data" -e ANGIE_ACME_ENABLED=1 \
+  -e ANGIE_ACME_DIRECTORY=https://127.0.0.1:19999/directory)
+wait_healthy "$cid" || fail "acme state-dir container healthy"
+acme_mode=""
+for _ in $(seq 1 20); do
+  acme_mode=$(docker exec "$cid" stat -c '%a %U' /data/acme 2>/dev/null || true)
+  [ -n "$acme_mode" ] && break
+  sleep 0.5
+done
+assert_eq "$acme_mode" "700 root" "the root master creates /data/acme as 0700 root"
+docker exec "$cid" sh -c 'printf probe >/data/acme/probe'
+docker rm -f "$cid" >/dev/null
+cid=$(start -v "$vol:/data" -e ANGIE_ACME_ENABLED=1 \
+  -e ANGIE_ACME_DIRECTORY=https://127.0.0.1:19999/directory)
+wait_healthy "$cid" || fail "acme state-dir recreate healthy"
+assert_eq "$(docker exec "$cid" cat /data/acme/probe 2>/dev/null || true)" "probe" \
+  "ACME state survives container recreation on the same volume"
+docker rm -f "$cid" >/dev/null
+
+# --- 26. Shipped log formats: namespaced names, whitelisted bare JSON fields --
+# Repository text checks, so a new format fails at once rather than on the
+# request that happens to leave a field empty. A duplicate log_format name is
+# fatal (`duplicate "log_format" name`), hence the angie_ prefix. In the JSON
+# formats only length, request_time and status may be unquoted: they are never
+# empty, and an empty unquoted value yields `"field":,`.
+for fmtfile in "$repo_root"/rootfs/etc/angie/http-conf-available.d/030-log-format-*.conf; do
+  fmtname=$(sed -n 's/^log_format \([^ ]*\).*/\1/p' "$fmtfile")
+  case "$fmtname" in
+  angie_*) pass "$(basename "$fmtfile"): format name '$fmtname' is namespaced" ;;
+  *) fail "$(basename "$fmtfile"): format name '$fmtname' takes a bare name" ;;
+  esac
+done
+for fmtfile in "$repo_root"/rootfs/etc/angie/http-conf-available.d/030-log-format-json*.conf; do
+  bare=$(grep -oE '"[a-z_]+":\$[a-z_]+' "$fmtfile" | sed 's/^"//; s/":.*//' | sort -u | tr '\n' ' ')
+  assert_eq "$bare" "length request_time status " \
+    "$(basename "$fmtfile"): only length, request_time and status are unquoted"
+done
 
 printf '\n%d test(s), %d failure(s)\n' "$tests" "$fails"
 [ "$fails" -eq 0 ]

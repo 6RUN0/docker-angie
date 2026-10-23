@@ -2,15 +2,12 @@
 
 . /docker-entrypoint-common.sh
 
-skip_toggle_unless_writable
-
-# Reset geoip2 state before deciding whether it is enabled this start. On a
-# persistent /etc/angie volume the active symlinks survive container recreation,
-# and both early `exit 0` paths (GEOIP2_DB_COUNTRY unset, or its DB
-# unreadable) would otherwise leave an orphaned `geoip2 <path>` map pointing at a
-# possibly-gone database. angie's geoip2 module opens the mmdb at config load, so
-# a stale map left in the final config fails `angie -t` (see
-# docker-entrypoint.sh). Re-enabled when geoip2 genuinely comes up.
+# Reset geoip2 state before deciding whether it is enabled this start
+# (declarative toggle, see docker-entrypoint-common.sh). Both early `exit 0`
+# paths (GEOIP2_DB_COUNTRY unset, or its DB unreadable) would otherwise leave
+# an active `geoip2 <path>` map pointing at a possibly-gone database. angie's
+# geoip2 module opens the mmdb at config load, so a stale map left in the final
+# config fails `angie -t` (see docker-entrypoint.sh).
 reset_httpconf 025-geoip2.conf
 reset_module http_geoip2.conf
 
@@ -33,23 +30,42 @@ case "$GEOIP2_DB_COUNTRY" in
   ;;
 esac
 
+: "${ANGIE_LOG_FORMAT_JSON_GEOIP2:=no}"
 : "${ANGIE_LOG_FORMAT_LOGFMT_GEOIP2:=no}"
+: "${ANGIE_LOG_JSON_GEOIP2:=no}"
 : "${ANGIE_LOG_LOGFMT_GEOIP2:=no}"
 
-ngx_ctl mod en http_geoip2.conf &&
-  ngx_info "GeoIP2 module enabled"
+# Each ngx_ctl is a command of its own, not the left side of `&&`: `set -e`
+# ignores a failure there, and startup would continue without the module.
+ngx_ctl mod en http_geoip2.conf
+ngx_info "GeoIP2 module enabled"
 
 # Render the active config from the pristine template every start: idempotent
 # across restarts (a changed DB path is re-applied) and the template is never
 # mutated in place. The validated charset above keeps the '|' delimiter safe.
-geoip2_conf="/etc/angie/http-conf-available.d/025-geoip2.conf"
+geoip2_conf="${HTTP_CONF_AVAILABLE_DIR}/025-geoip2.conf"
 sed -e "s|%%GEOIP2_DB_COUNTRY%%|$GEOIP2_DB_COUNTRY|g" "${geoip2_conf}.template" >"$geoip2_conf"
-ngx_ctl httpconf en 025-geoip2.conf &&
-  ngx_info "GeoIP2 database configured: ${GEOIP2_DB_COUNTRY}"
+ngx_ctl httpconf en 025-geoip2.conf
+ngx_info "GeoIP2 database configured: ${GEOIP2_DB_COUNTRY}"
+
+case "${ANGIE_LOG_FORMAT_JSON_GEOIP2}" in
+yes | on | 1 | true | enable | enabled)
+  enable_log_format "json-with-geoip2"
+  ;;
+esac
 
 case "${ANGIE_LOG_FORMAT_LOGFMT_GEOIP2}" in
 yes | on | 1 | true | enable | enabled)
   enable_log_format "logfmt-with-geoip2"
+  ;;
+esac
+
+# The geoip2 variants are explicit, none is a default: the country comes from a
+# database the toggle cannot promise. Both call enable_log and so override the
+# choice made in 40-log.sh, which is why this script is numbered 50.
+case "${ANGIE_LOG_JSON_GEOIP2}" in
+yes | on | 1 | true | enable | enabled)
+  enable_log "json-with-geoip2"
   ;;
 esac
 

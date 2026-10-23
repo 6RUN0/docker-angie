@@ -31,6 +31,9 @@ services:
     image: 6run0/angie:alpine
     container_name: angie
     restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /data:mode=1777
     ports:
       - "8080:80"
     healthcheck:
@@ -65,6 +68,9 @@ services:
     image: 6run0/angie:alpine
     container_name: angie
     restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /data:mode=1777
     networks:
       - front
     ports:
@@ -108,6 +114,9 @@ services:
     container_name: angie
     user: "65532:65532"
     restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /data:mode=1777
     ports:
       - "8080:8080"
     healthcheck:
@@ -124,10 +133,33 @@ services:
 docker compose run --user 1000:1000 angie
 ```
 
-Любой uid, имеющий права на запись в `/etc/angie/http-conf.d` и
-`/etc/angie/modules.d` (принадлежат `65532` в образе), может переключать
-функции через `ANGIE_*` при старте. Чужой uid без таких прав молча
-использует встроенные настройки по умолчанию.
+Любой UID может использовать рантайм-тумблеры: entrypoint пишет только в
+`/data`. Постоянный `/data/conf`, созданный другим UID, вызывает отказ; возьмите
+свежий tmpfs/том или исправьте владельца снаружи прикладного контейнера.
+
+## Постоянный `/data` для ACME
+
+Примеры выше используют tmpfs и не хранят состояние. С включённым ACME замените
+`tmpfs` на постоянный том, чтобы ключи учётной записи и сертификаты переживали
+пересоздание контейнера:
+
+```yaml
+services:
+  angie:
+    image: 6run0/angie:alpine
+    read_only: true
+    volumes:
+      - angie-data:/data
+      - ./angie-config:/etc/angie/custom:ro
+    environment:
+      ANGIE_ACME_ENABLED: "yes"
+
+volumes:
+  angie-data:
+```
+
+Не используйте tmpfs для ACME: повторные заказы сертификатов могут исчерпать
+лимиты CA. Не монтируйте `/data/conf` отдельно: он пересобирается при старте.
 
 ---
 

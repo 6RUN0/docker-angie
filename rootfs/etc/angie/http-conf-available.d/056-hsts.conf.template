@@ -1,0 +1,27 @@
+# HSTS: a client that got this header uses only https for the next max-age
+# seconds, whatever is typed in the address bar.
+# https://angie.software/angie/docs/configuration/modules/http/http_headers/
+#
+# Modelled on h5bp/server-configs-nginx (MIT),
+# h5bp/security/strict-transport-security.conf.
+#
+# CAVEAT: the header is IRREVERSIBLE. It cannot be revoked: a consumer that
+# loses its certificate leaves every visitor of the last max-age seconds with an
+# unrecoverable error for exactly that long. See docs/security.md (HSTS).
+#
+# Unlike h5bp, the header is sent over https only: clients must ignore it on a
+# plain-http redirect (RFC 6797). Cost: behind a TLS terminator $scheme is http
+# and no header is sent; HSTS then belongs to the terminator, or declare your
+# own map and add_header in /etc/angie/custom/http-conf.d.
+map $scheme $_stock_hsts {
+  https "%%HSTS_VALUE%%";
+}
+
+# `always` sends it on error responses too: a client that got a 502 over https
+# must stay on https.
+add_header Strict-Transport-Security $_stock_hsts always;
+
+# preload is deliberately not offered: it requires includeSubDomains, max-age
+# of at least 31536000 and a manual hstspreload.org submission, and removal
+# takes months to ship with browser releases. Declare your own add_header in
+# /etc/angie/custom/http-conf.d instead of this toggle if you need it.
