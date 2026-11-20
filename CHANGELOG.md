@@ -10,6 +10,11 @@ itself. The build number increments when the same Angie version is repackaged
 
 ## [Unreleased]
 
+### Security
+
+- Alpine and Debian images use [Angie 1.12.5](https://en.angie.software/angie/docs/oss_changes/#angie-1-12-5),
+  which includes upstream security fixes.
+
 ## [1.12.4-build2] - 2026-10-23
 
 ### Added
