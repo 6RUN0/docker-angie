@@ -10,6 +10,8 @@ itself. The build number increments when the same Angie version is repackaged
 
 ## [Unreleased]
 
+## [1.12.5-build1] - 2026-11-20
+
 ### Security
 
 - Alpine and Debian images use [Angie 1.12.5](https://en.angie.software/angie/docs/oss_changes/#angie-1-12-5),
@@ -304,7 +306,8 @@ First public release: Angie 1.11.8 packaged for `linux/amd64` and `linux/arm64`.
 - Published to the GitHub Container Registry (`ghcr.io/6run0/docker-angie`) and
   Docker Hub (`6run0/angie`) with immutable `...-build<N>` and floating tags.
 
-[Unreleased]: https://github.com/6RUN0/docker-angie/compare/v1.12.4-build2...HEAD
+[Unreleased]: https://github.com/6RUN0/docker-angie/compare/v1.12.5-build1...HEAD
+[1.12.5-build1]: https://github.com/6RUN0/docker-angie/releases/tag/v1.12.5-build1
 [1.12.4-build2]: https://github.com/6RUN0/docker-angie/releases/tag/v1.12.4-build2
 [1.12.4-build1]: https://github.com/6RUN0/docker-angie/releases/tag/v1.12.4-build1
 [1.12.3-build1]: https://github.com/6RUN0/docker-angie/releases/tag/v1.12.3-build1
