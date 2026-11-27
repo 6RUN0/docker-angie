@@ -10,6 +10,14 @@
 
 ## [Не выпущено]
 
+## [1.12.6-build1] - 2026-11-27
+
+### Безопасность
+
+- Образы Alpine и Debian используют [Angie 1.12.6](https://en.angie.software/angie/docs/oss_changes/#angie-1-12-6).
+  Обновление устраняет чрезмерную нагрузку на процессор при включённой
+  директиве HTTP `ssl_early_data` (CVE-2026-132779).
+
 ## [1.12.5-build1] - 2026-11-20
 
 ### Безопасность
@@ -315,7 +323,8 @@
 - Публикация в GitHub Container Registry (`ghcr.io/6run0/docker-angie`) и
   Docker Hub (`6run0/angie`) с неизменяемыми тегами `...-build<N>` и плавающими тегами.
 
-[Не выпущено]: https://github.com/6RUN0/docker-angie/compare/v1.12.5-build1...HEAD
+[Не выпущено]: https://github.com/6RUN0/docker-angie/compare/v1.12.6-build1...HEAD
+[1.12.6-build1]: https://github.com/6RUN0/docker-angie/releases/tag/v1.12.6-build1
 [1.12.5-build1]: https://github.com/6RUN0/docker-angie/releases/tag/v1.12.5-build1
 [1.12.4-build2]: https://github.com/6RUN0/docker-angie/releases/tag/v1.12.4-build2
 [1.12.4-build1]: https://github.com/6RUN0/docker-angie/releases/tag/v1.12.4-build1

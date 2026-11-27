@@ -425,7 +425,7 @@ everything else keeps the Dockerfile default.
 
 | Argument | Default | Description |
 |---|---|---|
-| `ANGIE_VERSION` | `1.12.5` | Angie core and module version, pinned with apk `=~` (Alpine) or resolved to one exact package version with `apt-cache madison` (Debian). Release tags must match it. |
+| `ANGIE_VERSION` | `1.12.6` | Angie core and module version, pinned with apk `=~` (Alpine) or resolved to one exact package version with `apt-cache madison` (Debian). Release tags must match it. |
 | `ANGIE_CONSOLE_VERSION` | `1.9.0` | Console Light package version; it has its own release cycle. |
 | `IMAGE_VERSION` | `dev` | Value of the `org.opencontainers.image.version` label, the image tag without the variant suffix. |
 | `VCS_REF` | empty | Source commit in the `org.opencontainers.image.revision` label. |

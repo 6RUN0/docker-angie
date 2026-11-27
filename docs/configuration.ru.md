@@ -426,7 +426,7 @@ Kubernetes и голый runc - нет. Поэтому `listen 443` в непр�
 
 | Аргумент | По умолчанию | Описание |
 |---|---|---|
-| `ANGIE_VERSION` | `1.12.5` | Версия ядра Angie и модулей; закреплена оператором `=~` в apk (Alpine) или сведена к одной точной версии пакета через `apt-cache madison` (Debian). Теги выпуска обязаны с ней совпадать. |
+| `ANGIE_VERSION` | `1.12.6` | Версия ядра Angie и модулей; закреплена оператором `=~` в apk (Alpine) или сведена к одной точной версии пакета через `apt-cache madison` (Debian). Теги выпуска обязаны с ней совпадать. |
 | `ANGIE_CONSOLE_VERSION` | `1.9.0` | Версия пакета Console Light; у него свой цикл выпусков. |
 | `IMAGE_VERSION` | `dev` | Значение метки `org.opencontainers.image.version`, тег образа без суффикса варианта. |
 | `VCS_REF` | пусто | Коммит источника в метке `org.opencontainers.image.revision`. |

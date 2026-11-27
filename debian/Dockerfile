@@ -36,7 +36,7 @@ ARG ANGIE_SIGNING_KEY_SHA256="06ef4d35c4f3cf1dfa2dc37751bdd51a95a5fb64390ac11f60
 ARG ANGIE_SOURCE_LIST="/etc/apt/sources.list.d/angie.sources"
 # Angie version pinned into the image. Bump via the upstream-check workflow PR;
 # release tags (vX.Y.Z-buildN) must match this value (enforced in release.yml).
-ARG ANGIE_VERSION=1.12.5
+ARG ANGIE_VERSION=1.12.6
 # Console Light has its own release cycle, separate from the server.
 ARG ANGIE_CONSOLE_VERSION=1.9.0
 

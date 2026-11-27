@@ -30,7 +30,7 @@ ARG ANGIE_SIGNING_KEY="/etc/apk/keys/angie-signing.rsa"
 ARG ANGIE_SIGNING_KEY_SHA256="180802f4ce816e61d9f9e325566b10f4e6c175215dddcb1aaf2185c4ab01e376"
 # Angie version pinned into the image. Bump via the upstream-check workflow PR;
 # release tags (vX.Y.Z-buildN) must match this value (enforced in release.yml).
-ARG ANGIE_VERSION=1.12.5
+ARG ANGIE_VERSION=1.12.6
 # Console Light has its own release cycle, separate from the server.
 ARG ANGIE_CONSOLE_VERSION=1.9.0
 

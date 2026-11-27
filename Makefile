@@ -22,7 +22,7 @@ NGINX_CONFIGS := rootfs/etc/angie/http.d/default.conf \
 # gixy-ng) that runs on current Python. The version is pinned so a CI run does
 # not execute whatever release PyPI serves that day. Override GIXY to use
 # another install.
-GIXY ?= uvx --from gixy-ng==0.2.57 gixy
+GIXY ?= uvx --from gixy-ng==0.2.64 gixy
 
 # GitHub Actions linters; both expected on PATH like shellcheck/hadolint.
 # Override either to use another install (e.g. ZIZMOR='uvx zizmor').
